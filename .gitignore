@@ -1,0 +1,18 @@
+# Python environment
+venv/
+__pycache__/
+*.pyc
+
+# Pretrained models -- fetched by get_models.py, ~42MB, never change
+models/*.onnx
+
+# Tracker outputs
+output/
+output*/
+webruns/
+_bench*/
+
+# Scratch from development and testing
+_probe/
+_selftest_frame.png
+_*/

@@ -1,0 +1,11 @@
+# Two dependencies, on purpose. Everything else is Python's standard library.
+#
+# opencv-contrib-python (NOT plain opencv-python) -- the "contrib" build is
+# the one that includes the CSRT tracker. Plain opencv-python does not have
+# it and the code will stop with a clear error if you install the wrong one.
+#
+# Tested on this Mac with opencv-contrib-python 5.0.0 and numpy 2.5.3,
+# Python 3.13.2, Apple Silicon. The tracker API moved between OpenCV 4 and
+# 5, so tracking.py checks all the places it has lived.
+opencv-contrib-python>=4.8
+numpy>=1.24
