@@ -662,6 +662,7 @@ that would need camera calibration and a known reference length. A
 | `benchmark.py` | The five-competition test set |
 | `webapp.py` | The local web page (stdlib only, no new dependencies) |
 | `get_models.py` | Fetches the three pretrained models |
+| `NOTICE.md` | Third-party code and model licences |
 | `FILMING.md` | **How to film so this works** -- read it before your next comp |
 | `export.py` | Video writer (codec choice) and CSV writer |
 | `main.py` | Selection, tracking loop, live window |
@@ -693,3 +694,10 @@ that would need camera calibration and a known reference length. A
    have enough clips to test against.
 4. Blade detection is what any actual refereeing help would need, and
    none of this touches it yet.
+
+---
+
+## Licence
+
+MIT — see [LICENSE](LICENSE). Third-party code and the pretrained models
+carry their own terms; see [NOTICE.md](NOTICE.md).

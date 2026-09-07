@@ -19,14 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This project vendors third-party code and uses pretrained models that carry
-their own licences:
-
-* vendor/mp_pose.py -- OpenCV Model Zoo, Apache 2.0.
-  See vendor/LICENSE-mediapipe-pose.txt.
-* The models fetched by get_models.py (YOLOX, MediaPipe BlazePose, ViT
-  tracker) are published by the OpenCV Model Zoo under their own licences.
-  They are not redistributed here.
