@@ -1,4 +1,4 @@
-# Fencing Video Tracker
+# Riposte
 
 Track two fencers through competition video. You pick them once, and the
 program follows them, writes out an annotated clip and a CSV of positions
@@ -38,8 +38,8 @@ stops.
 ## Setup
 
 ```bash
-git clone https://github.com/matthewyongenwang-coder/fencing-video-tracker.git
-cd fencing-video-tracker
+git clone https://github.com/matthewyongenwang-coder/riposte.git
+cd riposte
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt

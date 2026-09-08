@@ -1,8 +1,8 @@
 """
 webapp.py
 
-A local web page for running the tracker: pick a clip, scrub to the
-action, drag a box round each fencer, press Run, watch the result.
+Riposte's local web page: pick a clip, scrub to the action, drag a box
+round each fencer, press Run, watch the result.
 
     python3 webapp.py
 
@@ -145,7 +145,7 @@ def start_run(job_id, box_a, box_b, start_frame, max_frames, use_detect,
 # ----------------------------------------------------------------------
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = "FencingTracker/1.0"
+    server_version = "Riposte/1.0"
 
     def log_message(self, fmt, *args):
         pass                                   # keep the terminal readable
@@ -401,7 +401,7 @@ class Handler(BaseHTTPRequestHandler):
 
 
 PAGE = r"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Fencing Tracker</title>
+<html><head><meta charset="utf-8"><title>Riposte</title>
 <style>
 :root{--bg:#12141a;--panel:#1b1e26;--line:#2c313d;--ink:#e7e9ee;--dim:#9aa1b1;
       --a:#ff8c00;--b:#0a5aff;--ok:#35c26b;--bad:#ff5a5a}
@@ -449,7 +449,7 @@ video{width:100%;border-radius:8px;background:#000}
 input[type=range]{flex:1;min-width:220px}
 </style></head><body>
 <header>
-  <h1>Fencing Tracker</h1>
+  <h1>Riposte</h1>
   <p>Runs on your own computer. Nothing is uploaded anywhere. Same code as the terminal.</p>
 </header>
 <main>
@@ -705,7 +705,7 @@ def main():
     os.makedirs(WORK_DIR, exist_ok=True)
     mimetypes.add_type("video/mp4", ".mp4")
     server = ThreadingHTTPServer((HOST, PORT), Handler)
-    print(f"Fencing Tracker is running.\n")
+    print(f"Riposte is running.\n")
     print(f"    Open  http://{HOST}:{PORT}\n")
     print("Only this Mac can reach it. Press Ctrl+C to stop.")
     try:

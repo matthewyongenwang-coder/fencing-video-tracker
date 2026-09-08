@@ -1,7 +1,7 @@
 """
 main.py
 
-Fencing video tracker.
+Riposte: fencing video tracker.
 
 Pipeline:
     load video  ->  you box each fencer  ->  track both through the clip
