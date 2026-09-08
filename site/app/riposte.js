@@ -17,12 +17,12 @@
  * tracker was doing less than it looked. Detection every frame plus the
  * momentum model below covers the same job.
  *
- * CAMERA CORRECTION IS ALSO GONE, FOR NOW
- * camera.py estimates slide, rotation and zoom with optical flow. Doing
- * that here means shipping OpenCV.js, which is an 8MB download, so v1
- * skips it. Everything below treats screen coordinates as stable
- * coordinates. On a clip filmed from a tripod that is true. On a panning
- * clip the momentum model will be wrong, which is one more reason to read
+ * CAMERA CORRECTION IS HERE, BUT ONLY PARTLY
+ * camera.py fits slide, rotation and zoom with optical flow and RANSAC.
+ * Doing that properly here means shipping OpenCV.js at 8MB, so CameraShift
+ * at the bottom of this file estimates sliding only, with block matching
+ * on a downscaled greyscale copy. That covers the dominant term. Rotation
+ * and zoom are still uncorrected, which is one more reason to read
  * FILMING.md and put the phone down.
  */
 
@@ -199,19 +199,62 @@ export class DetectionGate {
     this.motion = [new FencerMotion(), new FencerMotion()];
     this.noBody = [0, 0];
     this.lost = [false, false];
+    this.recoverFrames = [0, 0];
+    this.lastPerson = [null, null];
+    // How far from the last known position we will look when trying to
+    // pick a lost fencer back up, in multiples of their box height.
+    this.recoverRadius = 3.0;
   }
 
-  step(fencers, detections, dt) {
+  /**
+   * Look for a lost fencer near where they were last seen.
+   *
+   * Deliberately strict about size. A fencer who has walked out of shot
+   * must stay lost rather than being replaced by a spectator who happens
+   * to be standing in roughly the right place.
+   */
+  _reacquire(i, fencers, detections, claimed) {
+    const remembered = this.lastPerson[i];
+    const box = fencers[i].box;
+    if (!remembered) return null;
+    const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    const radius = this.recoverRadius * box.h;
+    let best = null, bestDistance = Infinity;
+    detections.forEach((det, di) => {
+      if (claimed.has(di)) return;
+      const ratio = det.box.h / remembered.h;
+      if (ratio < 0.6 || ratio > 1.7) return;
+      const d = Math.hypot(det.box.x + det.box.w / 2 - cx,
+                           det.box.y + det.box.h * 0.30 - cy);
+      if (d > radius || d >= bestDistance) return;
+      bestDistance = d; best = det.box;
+    });
+    return best;
+  }
+
+  /**
+   * `stable` converts between screen coordinates and coordinates with the
+   * camera's movement taken out. Momentum has to be measured with the
+   * camera removed, because in raw screen coordinates a pan looks exactly
+   * like a fencer sprinting. Pass null to skip the correction.
+   */
+  step(fencers, detections, dt, stable) {
+    const toStable = p => stable ? stable.stabilise(p) : p;
+    const toScreen = p => stable ? stable.toImage(p) : p;
+
     const predicted = fencers.map((f, i) => {
       const guess = this.motion[i].predict(dt);
       if (!guess) return null;
-      return { x: Math.round(guess.x - f.box.w / 2),
-               y: Math.round(guess.y - f.box.h / 2), w: f.box.w, h: f.box.h };
+      const onScreen = toScreen(guess);
+      return { x: Math.round(onScreen.x - f.box.w / 2),
+               y: Math.round(onScreen.y - f.box.h / 2), w: f.box.w, h: f.box.h };
     });
 
     const current = fencers.map(f => f.box);
     const maxMove = 0.45 * Math.max(...current.map(b => b.h));
     const matched = matchDetections(current, detections, maxMove, predicted);
+    const claimed = new Set();
+    matched.forEach(m => { if (m) claimed.add(detections.findIndex(d => d.box === m)); });
 
     return fencers.map((fencer, i) => {
       const wasLost = this.lost[i];
@@ -221,13 +264,46 @@ export class DetectionGate {
                      speed: this.motion[i].speed() };
 
       if (!person) {
+        // Already given up on this one? Try to pick them up again.
+        //
+        // Without this, a fencer lost at a crossing stays lost for the
+        // rest of the clip, because matching needs the stale box to
+        // overlap a detection and the stale box is nowhere near anybody.
+        // Recovery looks near where they were last seen, for someone of
+        // about the right size who is not already claimed, and insists on
+        // seeing them twice before believing it.
+        if (wasLost) {
+          const found = this._reacquire(i, fencers, detections, claimed);
+          if (found) {
+            this.recoverFrames[i] += 1;
+            if (this.recoverFrames[i] >= 2) {
+              fencer.box = torsoFromPerson(found, { w: fencer.box.w, h: fencer.box.h });
+              fencer.tracked = true;
+              claimed.add(detections.findIndex(d => d.box === found));
+              this.noBody[i] = 0;
+              this.lost[i] = false;
+              this.recoverFrames[i] = 0;
+              this.motion[i] = new FencerMotion();
+              this.motion[i].observe(toStable({
+                x: fencer.box.x + fencer.box.w / 2,
+                y: fencer.box.y + fencer.box.h / 2 }), dt, fencer.box.h);
+              info.lost = false;
+              info.recovered = true;
+              return info;
+            }
+          } else {
+            this.recoverFrames[i] = 0;
+          }
+        }
+
         this.noBody[i] += 1;
         // Coast through the gap. This is what gets a fencer through a
         // crossing, where the detector may merge two bodies for a while.
         if (this.motion[i].position && this.motion[i].coasting < this.maxCoastFrames) {
           const c = this.motion[i].coast(dt);
-          fencer.box = { x: Math.round(c.x - fencer.box.w / 2),
-                         y: Math.round(c.y - fencer.box.h / 2),
+          const onScreen = toScreen(c);
+          fencer.box = { x: Math.round(onScreen.x - fencer.box.w / 2),
+                         y: Math.round(onScreen.y - fencer.box.h / 2),
                          w: fencer.box.w, h: fencer.box.h };
           info.coasting = this.motion[i].coasting;
         }
@@ -251,8 +327,10 @@ export class DetectionGate {
         fencer.box = snapped;
         info.snapped = true;
       }
+      this.lastPerson[i] = { h: person.h, w: person.w };
       this.motion[i].observe(
-        { x: fencer.box.x + fencer.box.w / 2, y: fencer.box.y + fencer.box.h / 2 },
+        toStable({ x: fencer.box.x + fencer.box.w / 2,
+                   y: fencer.box.y + fencer.box.h / 2 }),
         dt, fencer.box.h);
       info.speed = this.motion[i].speed();
       return info;
@@ -263,6 +341,8 @@ export class DetectionGate {
     this.motion[index] = new FencerMotion();
     this.noBody[index] = 0;
     this.lost[index] = false;
+    this.recoverFrames[index] = 0;
+    this.lastPerson[index] = null;
   }
 }
 
@@ -405,4 +485,136 @@ export function buildCsv(rows) {
     lines.push(cells.join(","));
   }
   return lines.join("\n");
+}
+
+// ----------------------------------------------------------------------
+// Camera movement, without shipping OpenCV
+// ----------------------------------------------------------------------
+
+/**
+ * Estimates how far the camera moved between two frames.
+ *
+ * WHY THIS IS HERE NOW
+ * The first browser version skipped camera correction, on the grounds
+ * that doing it properly means shipping OpenCV.js at 8MB. That was a
+ * mistake on panning footage. The momentum model works on velocities, and
+ * in raw screen coordinates a pan looks exactly like a fencer sprinting.
+ * On the fleche test clip the camera pans 164px and zooms 9.2%, so every
+ * prediction going into the crossing was wrong by that much.
+ *
+ * HOW IT WORKS
+ * Take a grid of small patches from the previous frame, skipping anything
+ * near a fencer, and find where each one moved to by searching a small
+ * window in the new frame. Score by sum of absolute differences, which is
+ * cheap and good enough for whole-image motion. The median of all the
+ * patch displacements is the camera's movement, and a median means a few
+ * patches that landed on a moving person cannot drag the answer around.
+ *
+ * All of it happens on a downscaled greyscale copy, so a 1920x1080 frame
+ * becomes 320x180 and the whole thing costs about a millisecond.
+ *
+ * WHAT IT DOES NOT DO
+ * Only sliding. Not rotation, not zoom. The Python version fits a full
+ * similarity transform with RANSAC. This handles the dominant term and
+ * leaves the rest, which is another reason FILMING.md says do not pan.
+ */
+export class CameraShift {
+  constructor(width = 320) {
+    this.width = width;
+    this.prev = null;
+    this.scale = 1;
+    this.canvas = null;
+    this.ctx = null;
+  }
+
+  _grey(source) {
+    if (!this.canvas) {
+      this.canvas = new OffscreenCanvas(this.width, 1);
+      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
+    }
+    const h = Math.round(this.width * source.height / source.width);
+    if (this.canvas.height !== h) this.canvas.height = h;
+    this.scale = source.width / this.width;
+    this.ctx.drawImage(source, 0, 0, this.width, h);
+    const rgba = this.ctx.getImageData(0, 0, this.width, h).data;
+    const grey = new Uint8Array(this.width * h);
+    for (let i = 0; i < grey.length; i++) {
+      // luma, near enough
+      grey[i] = (rgba[i * 4] * 77 + rgba[i * 4 + 1] * 150 + rgba[i * 4 + 2] * 29) >> 8;
+    }
+    return { data: grey, w: this.width, h };
+  }
+
+  /** Returns { dx, dy, reliable, points } in FULL resolution pixels. */
+  update(source, fencerBoxes) {
+    const cur = this._grey(source);
+    if (!this.prev || this.prev.w !== cur.w || this.prev.h !== cur.h) {
+      this.prev = cur;
+      return { dx: 0, dy: 0, reliable: false, points: 0 };
+    }
+    const prev = this.prev;
+    const PATCH = 8, SEARCH = 10, STEP = 20;
+    // Fencer boxes in small-image coordinates, grown a little so a blade
+    // or a trailing foot just outside the box is skipped too.
+    const skip = fencerBoxes.filter(Boolean).map(b => ({
+      x: b.x / this.scale - 8, y: b.y / this.scale - 8,
+      w: b.w / this.scale + 16, h: b.h / this.scale + 16,
+    }));
+    const inSkip = (x, y) => skip.some(s =>
+      x >= s.x && x <= s.x + s.w && y >= s.y && y <= s.y + s.h);
+
+    const dxs = [], dys = [];
+    for (let y = SEARCH + PATCH; y < cur.h - SEARCH - PATCH; y += STEP) {
+      for (let x = SEARCH + PATCH; x < cur.w - SEARCH - PATCH; x += STEP) {
+        if (inSkip(x, y)) continue;
+        // Skip flat patches. A blank stretch of floor matches everywhere
+        // equally well and contributes nothing but noise.
+        let mn = 255, mx = 0;
+        for (let j = 0; j < PATCH; j += 2) {
+          for (let i = 0; i < PATCH; i += 2) {
+            const v = prev.data[(y + j) * prev.w + (x + i)];
+            if (v < mn) mn = v;
+            if (v > mx) mx = v;
+          }
+        }
+        if (mx - mn < 18) continue;
+
+        let bestScore = Infinity, bdx = 0, bdy = 0;
+        for (let oy = -SEARCH; oy <= SEARCH; oy += 2) {
+          for (let ox = -SEARCH; ox <= SEARCH; ox += 2) {
+            let sad = 0;
+            for (let j = 0; j < PATCH; j += 2) {
+              const pr = (y + j) * prev.w + x;
+              const cr = (y + j + oy) * cur.w + x + ox;
+              for (let i = 0; i < PATCH; i += 2) {
+                sad += Math.abs(prev.data[pr + i] - cur.data[cr + i]);
+              }
+            }
+            if (sad < bestScore) { bestScore = sad; bdx = ox; bdy = oy; }
+          }
+        }
+        dxs.push(bdx); dys.push(bdy);
+      }
+    }
+
+    this.prev = cur;
+    if (dxs.length < 12) return { dx: 0, dy: 0, reliable: false, points: dxs.length };
+
+    const median = a => { const s = [...a].sort((p, q) => p - q); return s[s.length >> 1]; };
+    // The patches moved with the background. The camera moved the other
+    // way, and the answer is wanted in full resolution pixels.
+    return { dx: -median(dxs) * this.scale, dy: -median(dys) * this.scale,
+             reliable: true, points: dxs.length };
+  }
+}
+
+/**
+ * Keeps a running total of camera movement so a position can be converted
+ * into "where it would be if the camera had never moved".
+ */
+export class StableFrame {
+  constructor() { this.dx = 0; this.dy = 0; }
+  accumulate(shift) { if (shift.reliable) { this.dx += shift.dx; this.dy += shift.dy; } }
+  stabilise(p) { return { x: p.x + this.dx, y: p.y + this.dy }; }
+  toImage(p) { return { x: p.x - this.dx, y: p.y - this.dy }; }
 }

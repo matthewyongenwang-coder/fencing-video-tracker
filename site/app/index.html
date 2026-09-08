@@ -129,8 +129,8 @@ footer{padding:26px 0 50px;color:var(--dim);font-size:13.5px}
 <canvas id="work" class="hidden"></canvas>
 
 <script type="module">
-import { DetectionGate, OverlapWatch, PisteAxis, MovementLabeler, buildCsv }
-  from './riposte.js';
+import { DetectionGate, OverlapWatch, PisteAxis, MovementLabeler, buildCsv,
+         CameraShift, StableFrame } from './riposte.js';
 
 const $ = id => document.getElementById(id);
 const show = (id, on) => $(id).classList.toggle('hidden', !on);
@@ -143,46 +143,153 @@ let detector = null, fps = 30, totalFrames = 0, frame = 0, scale = 1;
 let boxes = { A: null, B: null }, drawing = null, start = null, live = null;
 let csvText = '';
 
-// ---------- 1. can this browser do it at all ----------
-const MODEL = 'https://storage.googleapis.com/mediapipe-models/object_detector/' +
-              'efficientdet_lite0/float16/1/efficientdet_lite0.tflite';
-let vision;
+// ---------- 1. pick the best detector this browser can run ----------
+//
+// Two detectors, measured on the fleche test clip over 221 frames:
+//
+//   YOLOX      Fencer B lost on   6 frames, 12.9 people found per frame
+//   MediaPipe  Fencer B lost on  94 frames,  6.0 people found per frame
+//
+// MediaPipe was simply missing fencers. It is smaller and loads in half a
+// second, but half the detections means half the chances of keeping hold
+// of somebody. YOLOX is the same model the Python version uses, needs
+// WebGPU, and is a 36MB download the browser then caches.
+//
+// So: YOLOX when WebGPU exists, MediaPipe when it does not, and say which
+// one is running rather than quietly being less accurate.
 
-async function setupDetector() {
-  vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
+const YOLOX_URL = 'https://media.githubusercontent.com/media/opencv/opencv_zoo/main/' +
+                  'models/object_detection_yolox/object_detection_yolox_2022nov.onnx';
+const MP_URL = 'https://storage.googleapis.com/mediapipe-models/object_detector/' +
+               'efficientdet_lite0/float16/1/efficientdet_lite0.tflite';
+
+async function makeYolox(onProgress) {
+  const ort = await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.mjs');
+  ort.env.wasm.wasmPaths = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+
+  // Fetch by hand so the download can be reported. 36MB on a slow
+  // connection with no feedback looks exactly like a hung page.
+  const res = await fetch(YOLOX_URL);
+  const total = +res.headers.get('content-length') || 35858002;
+  const reader = res.body.getReader();
+  const chunks = []; let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value); got += value.length;
+    onProgress(got / total);
+  }
+  const bytes = new Uint8Array(got); let at = 0;
+  for (const c of chunks) { bytes.set(c, at); at += c.length; }
+
+  const sess = await ort.InferenceSession.create(bytes, { executionProviders: ['webgpu'] });
+  const SZ = 640, grids = [], strides = [];
+  for (const st of [8, 16, 32]) {
+    const g = SZ / st;
+    for (let y = 0; y < g; y++) for (let x = 0; x < g; x++) { grids.push(x, y); strides.push(st); }
+  }
+  const off = new OffscreenCanvas(SZ, SZ);
+  const octx2 = off.getContext('2d', { willReadFrequently: true });
+  const plane = SZ * SZ, chw = new Float32Array(3 * plane);
+  const iou = (a, b) => {
+    const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
+    const x2 = Math.min(a.x + a.w, b.x + b.w), y2 = Math.min(a.y + a.h, b.y + b.h);
+    if (x2 <= x1 || y2 <= y1) return 0;
+    const ov = (x2 - x1) * (y2 - y1);
+    return ov / (a.w * a.h + b.w * b.h - ov);
+  };
+
+  return {
+    name: 'YOLOX', accurate: true,
+    async run(source) {
+      // Letterbox into the square the model wants, padding with grey.
+      const scale = Math.min(SZ / source.width, SZ / source.height);
+      octx2.fillStyle = 'rgb(114,114,114)';
+      octx2.fillRect(0, 0, SZ, SZ);
+      octx2.drawImage(source, 0, 0, Math.round(source.width * scale),
+                      Math.round(source.height * scale));
+      const d = octx2.getImageData(0, 0, SZ, SZ).data;
+      // BGR, unnormalised, which is what this model was exported for.
+      for (let i = 0; i < plane; i++) {
+        chw[i] = d[i * 4 + 2]; chw[plane + i] = d[i * 4 + 1]; chw[2 * plane + i] = d[i * 4];
+      }
+      const feeds = {};
+      feeds[sess.inputNames[0]] = new ort.Tensor('float32', chw, [1, 3, SZ, SZ]);
+      const raw = (await sess.run(feeds))[sess.outputNames[0]].data;
+
+      const boxes = [];
+      for (let i = 0; i < grids.length / 2; i++) {
+        const b = i * 85, score = raw[b + 4] * raw[b + 5];   // objectness x person
+        if (score < 0.30) continue;
+        const st = strides[i];
+        const cx = (raw[b] + grids[i * 2]) * st, cy = (raw[b + 1] + grids[i * 2 + 1]) * st;
+        const w = Math.exp(raw[b + 2]) * st, h = Math.exp(raw[b + 3]) * st;
+        boxes.push({ box: { x: (cx - w / 2) / scale, y: (cy - h / 2) / scale,
+                            w: w / scale, h: h / scale }, score });
+      }
+      boxes.sort((a, b) => b.score - a.score);
+      const keep = [];
+      for (const b of boxes) if (!keep.some(k => iou(k.box, b.box) > 0.5)) keep.push(b);
+      return keep;
+    },
+  };
+}
+
+async function makeMediaPipe() {
+  const vision = await import('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs');
   const fileset = await vision.FilesetResolver.forVisionTasks(
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm');
   for (const delegate of ['GPU', 'CPU']) {
     try {
       const det = await vision.ObjectDetector.createFromOptions(fileset, {
-        baseOptions: { modelAssetPath: MODEL, delegate },
-        scoreThreshold: 0.30, categoryAllowlist: ['person'], runningMode: 'VIDEO',
+        baseOptions: { modelAssetPath: MP_URL, delegate },
+        scoreThreshold: 0.30, maxResults: 20,
+        categoryAllowlist: ['person'], runningMode: 'VIDEO',
       });
-      return { det, delegate };
+      let ts = 0;
+      return {
+        name: `MediaPipe (${delegate})`, accurate: false,
+        async run(source) {
+          const r = det.detectForVideo(source, ts++);
+          return r.detections.map(x => ({
+            box: { x: x.boundingBox.originX, y: x.boundingBox.originY,
+                   w: x.boundingBox.width, h: x.boundingBox.height },
+            score: x.categories[0].score }));
+        },
+      };
     } catch (e) { if (delegate === 'CPU') throw e; }
   }
 }
 
 try {
   const t0 = performance.now();
-  const r = await setupDetector();
-  detector = r.det;
-  const load = ((performance.now() - t0) / 1000).toFixed(1);
-  if (r.delegate === 'GPU') {
-    $('cap').innerHTML = `<span class="chip set">GPU ready</span> ` +
-      `Person detector loaded in ${load}s. Measured on an M-series Mac this runs ` +
-      `at about 45 frames per second, which is faster than the video plays.`;
+  if (navigator.gpu) {
+    $('cap').innerHTML = 'WebGPU found. Downloading the accurate detector, 36MB, ' +
+                         'cached after the first time… <b id="dl">0%</b>';
+    detector = await makeYolox(p => {
+      const el = $('dl'); if (el) el.textContent = Math.round(p * 100) + '%';
+    });
   } else {
-    $('cap').innerHTML = `<span class="chip warn">CPU only</span> ` +
-      `No GPU path was available, so detection falls back to the CPU. It will still ` +
-      `work but expect roughly 18 frames per second, so a clip takes about twice as ` +
-      `long as it lasts.`;
+    detector = await makeMediaPipe();
+  }
+  const load = ((performance.now() - t0) / 1000).toFixed(1);
+  if (detector.accurate) {
+    $('cap').innerHTML = `<span class="chip set">${detector.name} on WebGPU</span> ` +
+      `Ready in ${load}s. This is the same detector the Python version uses. ` +
+      `Measured on an M-series Mac at about 35 frames per second.`;
+  } else {
+    $('cap').innerHTML = `<span class="chip warn">${detector.name}</span> ` +
+      `Ready in ${load}s. This browser has no WebGPU, so it fell back to a smaller ` +
+      `detector. It works, but it finds about half as many people per frame and ` +
+      `loses fencers far more often. On the test clip it lost one fencer for 94 ` +
+      `frames where the accurate detector lost them for 6. Chrome or Edge will ` +
+      `use the better one.`;
   }
   show('loadCard', true);
 } catch (e) {
   $('cap').innerHTML = `<span class="chip warn">Not supported</span> ` +
-    `The person detector could not start in this browser (${e.message}). ` +
-    `Try Chrome, Edge or Safari 26 and up, or use the Python version.`;
+    `No detector could start in this browser (${e.message}). ` +
+    `Try Chrome or Edge, or use the Python version.`;
 }
 
 // ---------- 2. load a clip, without uploading it ----------
@@ -304,6 +411,8 @@ async function runTracking() {
   const labelers = [new MovementLabeler(axis, +1), new MovementLabeler(axis, -1)];
   const gate = new DetectionGate();
   const overlap = new OverlapWatch();
+  const camera = new CameraShift();
+  const stable = new StableFrame();
   const rows = [];
   const events = [];
 
@@ -375,13 +484,13 @@ async function runTracking() {
       continue;
     }
     lastMedia = meta.mediaTime;
-    onFrame(meta);
+    await onFrame(meta);
     target += step;
     if (target > vid.duration) break;
   }
   finish();
 
-  function onFrame(meta) {
+  async function onFrame(meta) {
     // meta.mediaTime is the frame's real presentation timestamp, which is
     // what the Python version had to measure by hand because the file
     // header lies about frame rate.
@@ -390,16 +499,15 @@ async function runTracking() {
     prevTime = t;
 
     wctx.drawImage(vid, 0, 0);
-    const res = detector.detectForVideo(work, Math.round(t * 1000) + (ts++));
-    const detections = res.detections.map(d => ({
-      box: { x: d.boundingBox.originX, y: d.boundingBox.originY,
-             w: d.boundingBox.width, h: d.boundingBox.height },
-      score: d.categories[0].score,
-    }));
+    const detections = await detector.run(work);
 
-    const report = gate.step(fencers, detections, dt);
+    // Take the camera's own movement out before anything reads a
+    // velocity, otherwise a pan looks like a fencer sprinting.
+    stable.accumulate(camera.update(work, fencers.map(f => f.box)));
+
+    const report = gate.step(fencers, detections, dt, stable);
     const states = fencers.map((f, i) => {
-      const m = labelers[i].update(t, centre(f), f.tracked);
+      const m = labelers[i].update(t, stable.stabilise(centre(f)), f.tracked);
       if (report[i].newlyLost) {
         note(`frame ${processed}, t=${t.toFixed(2)}s: ${f.label} LOST. ` +
              `No person in the box (${detections.length} detected in frame).`);

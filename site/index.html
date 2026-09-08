@@ -272,13 +272,19 @@ python3 get_models.py</code></pre>
     <h3>Or run it in the browser</h3>
     <p>There is a <a href="app/">browser version</a> that needs no install at all.
        The video is read straight off your disk and never uploaded, so clip size
-       does not matter. It uses a lighter detector than the Python version, which
-       is faster to load but loses fencers more often. On the fleche clip it
-       tracked Fencer A correctly the whole way and lost Fencer B at the crossing,
-       where the Python version holds both. It says so rather than guessing.</p>
-    <p>It needs a GPU path in the browser. Measured on an M-series Mac: 46 frames
-       per second on the GPU, 19 on the CPU fallback. Without either it will not
-       be usable.</p>
+       does not matter. With WebGPU it runs the same YOLOX detector as the Python
+       version, at about 35 frames per second.</p>
+    <p>I first shipped it with a smaller detector because it loads in half a second
+       instead of downloading 36MB. Measured over 221 frames of the fleche clip,
+       that was a bad trade:</p>
+    <table>
+      <tr><th>Detector</th><th>People found per frame</th><th>Frames a fencer was lost</th></tr>
+      <tr><td>Small (EfficientDet-Lite0)</td><td>6.0</td><td class="bad">94</td></tr>
+      <tr><td>YOLOX, same as Python</td><td>12.9</td><td class="ok">6</td></tr>
+    </table>
+    <p>The small one was finding half as many people, so it was simply missing
+       fencers. The browser version now uses YOLOX when WebGPU is available and
+       says plainly when it has fallen back to the weaker one.</p>
   </div>
 </section>
 
