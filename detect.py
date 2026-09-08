@@ -4,7 +4,7 @@ detect.py
 Finds PEOPLE in each frame, so the tracker has real candidates to snap to
 instead of drifting onto whatever texture happens to look similar.
 
-WHY THIS EXISTS -- the measurement that forced it
+WHY THIS EXISTS, and the measurement that forced it
 Running the old tracker over five clips from four competitions, only 5 of
 10 fencer-tracks were still on the right person at the end. Every single
 failure ended up on the same kind of thing:
@@ -22,7 +22,7 @@ this.
 
 A person detector does. YOLOX cannot return a banner, because a banner is
 not in its vocabulary. That removes the whole failure mode structurally
-rather than trying to detect it after the fact -- which I tried four
+rather than trying to detect it after the fact, which I tried four
 different ways and could not make separate reliably (see the README).
 
 WHAT IT IS
@@ -39,7 +39,7 @@ photographs of fencers on the San Francisco back wall as people, which
 was the thing I most expected to go wrong.
 
 WHAT IT STILL CANNOT DO
-It finds people. It does not know WHICH person is your Fencer A -- every
+It finds people. It does not know WHICH person is Fencer A, because every
 fencer, referee, coach and spectator comes back as an equally valid
 person. Deciding which detection belongs to which fencer is the
 association step below, and that is still just geometry and motion
@@ -138,7 +138,7 @@ def torso_from_person(person_box, keep_size=None):
 
     The torso sits in the upper-middle of a standing person, so the centre
     goes about 30% of the way down. If `keep_size` is given we reuse the
-    tracker's existing box size instead of recomputing it -- that stops the
+    tracker's existing box size instead of recomputing it. That stops the
     box pulsing in size every time the detector wobbles, which was what
     made an earlier pose-based version collapse to a tiny square.
     """
@@ -196,7 +196,7 @@ def match_detections(fencer_boxes, detections, max_move, predicted_boxes=None):
         # Using the prediction ALONE was tried and made things worse: on
         # a clip that previously tracked perfectly, box jitter produced
         # noisy velocity, the prediction overshot, the match failed, and
-        # the fencer coasted further off -- a feedback loop that lost 24
+        # the fencer coasted further off, a feedback loop that lost 24
         # frames on an easy clip. The current box keeps it anchored on
         # ordinary frames; the prediction only earns its keep during a
         # crossing, when the current box is on top of the wrong person.
@@ -241,7 +241,7 @@ class FencerMotion:
     """
     Where a fencer is heading, measured in the steady reference frame.
 
-    WHY THIS EXISTS -- the crossing problem
+    WHY THIS EXISTS, the crossing problem
     When two fencers run past each other in a fleche, both boxes end up
     over the same patch of image for several frames. Coming out the other
     side, a template tracker has no way to tell which body is which, and
@@ -352,7 +352,7 @@ class DetectionGate:
         # 20 frames is about 0.7 seconds.
         #
         # This was 12, and 12 was too impatient. Measured detector recall
-        # on a clip that tracks perfectly is about 94% -- the misses are
+        # on a clip that tracks perfectly is about 94%, and the misses are
         # the deep lunge frames, where a fully extended fencer stops
         # looking like the upright person the detector expects. Twelve
         # frames of patience turned that into a false "LOST" on an easy
@@ -379,7 +379,7 @@ class DetectionGate:
         Update every fencer against this frame's detections.
 
         `camera` is the CameraMotion instance and `dt` the seconds since
-        the previous frame -- both needed because prediction happens in
+        the previous frame. Both are needed because prediction happens in
         the steady reference frame, not in image coordinates.
         """
         from verify import intersection_over_union

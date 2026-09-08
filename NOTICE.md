@@ -6,20 +6,20 @@ terms.
 
 ## Vendored code
 
-**`vendor/mp_pose.py`** — copied unchanged from the
+**`vendor/mp_pose.py`** is copied unchanged from the
 [OpenCV Model Zoo](https://github.com/opencv/opencv_zoo/blob/main/models/pose_estimation_mediapipe/mp_pose.py),
-licensed **Apache 2.0**. The full licence text is in
+and is licensed Apache 2.0. The full licence text is in
 [`vendor/LICENSE-mediapipe-pose.txt`](vendor/LICENSE-mediapipe-pose.txt).
 
-It is vendored rather than reimplemented because its preprocessing (crop,
-pad to square, rotate to the hip-to-shoulder axis, then invert all of that
-on the way back out) is intricate and easy to get subtly wrong.
+I vendored it rather than rewriting it because its preprocessing (crop,
+pad to square, rotate to the hip-to-shoulder axis, then undo all of that on
+the way back out) is fiddly and easy to get subtly wrong.
 
 ## Models
 
-`get_models.py` downloads three pretrained models at setup time. **None of
-them are redistributed in this repository**, and none are trained by this
-project — all three are released models used as published.
+`get_models.py` downloads three pretrained models at setup time. None of
+them are redistributed in this repository and I did not train any of them.
+All three are released models used as published.
 
 | Model | Source | Used for |
 |---|---|---|
@@ -32,6 +32,6 @@ terms before redistributing the model files or using them commercially.
 
 ## Test footage
 
-The clips referenced in `benchmark.py` are the author's own competition
-recordings and are **not** included in this repository. Point
-`FENCING_VIDEOS` at your own footage, or edit `CASES`.
+The clips referenced in `benchmark.py` are my own competition recordings
+and are not included in this repository. Point `FENCING_VIDEOS` at your own
+footage, or edit `CASES`.

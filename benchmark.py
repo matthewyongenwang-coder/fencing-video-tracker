@@ -16,7 +16,7 @@ at 960x544, heavy motion blur, hand-held panning, and in one case a wall
 of posters with pictures of fencers on them.
 
 HOW IT IS SCORED
-There is no automatic ground truth here -- nobody has labelled where
+There is no automatic ground truth here. Nobody has labelled where
 each fencer really is on every frame. So each run writes a filmstrip
 image per case, and a human decides whether each box is still on the
 right person at the end. That judgement gets recorded in EXPECTED below.
@@ -62,7 +62,7 @@ CASES = [
      210, 150, (118, 180, 65, 100), (515, 212, 70, 95)),
 
     # Severe motion blur, and the back wall is covered in large PHOTOS OF
-    # FENCERS -- about as unfair a set of distractors as exists.
+    # FENCERS, about as unfair a set of distractors as exists.
     ("sf-blur-posters",
      f"{FENCING}/AFM SAN FRANSICO NOV 1 2025/Y14/2025-11-01-AFM-SemiFinal2.mp4",
      545, 150, (350, 400, 150, 210), (1075, 430, 100, 190)),
@@ -233,7 +233,7 @@ def main():
               f"{result.get('frames_lost',[0,0])[0]:5}/"
               f"{result.get('frames_lost',[0,0])[1]:<6}")
 
-    print(f"\nFilmstrips written to {args.out_dir}/ -- look at them. "
+    print(f"\nFilmstrips written to {args.out_dir}/. Look at them. "
           "Warning counts alone do not tell you whether the boxes are on "
           "the right people.")
 

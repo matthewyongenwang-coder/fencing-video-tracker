@@ -1,14 +1,14 @@
 """
 pose.py
 
-Finds body landmarks -- the "lines drawn on the body" you were thinking of --
-for each fencer we are already tracking.
+Finds body landmarks, the stick figure drawn over each fencer we are
+already tracking.
 
 WHAT THIS IS
 BlazePose, a small pretrained model from Google, released by OpenCV in
 their Model Zoo. It returns 33 body points: eyes, shoulders, elbows,
 wrists, hips, knees, ankles, feet. It runs through cv2.dnn, so it adds
-NO new pip dependency -- just a 5MB model file, the same arrangement as
+no new pip dependency, just a 5MB model file, the same arrangement as
 the ViT tracker.
 
 WHY IT IS POINTED AT OUR BOX INSTEAD OF THE WHOLE FRAME
@@ -19,16 +19,16 @@ already know where each fencer is, because you selected them and the
 tracker has been following them. So the tracked box becomes the region
 of interest. This also means the pose is always attached to the fencer
 YOU chose, instead of whichever body the detector happened to rank
-first -- which matters a lot in a hall full of identical white kit.
+first, which matters a lot in a hall full of identical white kit.
 
 WHAT IT GIVES US THAT A BOX DOES NOT
 * ANKLES. Where the fencer's feet actually meet the piste. A box edge is
-  arbitrary -- it moves when the box drifts or resizes. Feet are real.
+  arbitrary and moves when the box drifts or resizes. Feet are real.
   This is the anchor that makes "has the tracker wandered into the
   background?" answerable, because background people's feet sit much
   higher in frame than piste-level feet.
 * WRISTS AND ELBOWS. The sword hand, and how extended the arm is. That
-  is the closest honest handle we have on blade actions -- see the
+  is the closest honest handle I have on blade actions. See the
   README about why the blade itself mostly isn't there to be seen.
 * A REAL "IS ANYONE HERE?" ANSWER. Point it at empty floor and it
   returns nothing. Verified: a box on bare piste gives no pose at all,
@@ -40,7 +40,7 @@ two. On a 4 second clip that's a few extra seconds. It is off by default
 (`--pose`) because you don't always need it.
 
 WHAT IT DOES NOT DO HERE
-It does NOT drive the tracker. It was tempting -- letting pose re-lock
+It does NOT drive the tracker. It was tempting, because letting pose re-lock
 the box fixed a drift that CSRT could not survive, moving Fencer A from
 completely lost to correct. But the same change made the OTHER fencer
 worse, so it is not a net win yet and is not wired in. The numbers are
@@ -89,7 +89,7 @@ class PoseResult:
 
     @property
     def feet(self):
-        """Midpoint between the ankles -- where the fencer meets the floor."""
+        """Midpoint between the ankles, where the fencer meets the floor."""
         return tuple((self.landmarks[LEFT_ANKLE] + self.landmarks[RIGHT_ANKLE]) / 2.0)
 
     @property
@@ -112,7 +112,7 @@ class PoseResult:
 
     def sword_hand(self, prefer_right=True):
         """
-        The wrist further from the body centre -- the extended arm, which
+        The wrist further from the body centre, which is the extended arm and
         for a fencer en garde is the sword arm.
 
         This is a GUESS from geometry. It does not know which hand holds
@@ -133,7 +133,7 @@ class PoseResult:
         further from the camera.
 
         A bigger number means a more extended arm. It does NOT mean an
-        attack, a parry, or a hit -- it is arm geometry, nothing more.
+        attack, a parry, or a hit. It is arm geometry, nothing more.
         """
         wrist, _elbow = self.sword_hand()
         reach = np.linalg.norm(np.array(wrist) - np.array(self.shoulders))
@@ -169,7 +169,7 @@ class PoseEstimator:
         It normally comes from a person detector: two points, roughly
         mid-hip and a point out past the head, which together set both
         the square crop and the rotation. We fake it from the tracked
-        box -- hips a little below box centre, "up" being straight up,
+        box: hips a little below box centre, "up" being straight up,
         and a square generous enough to include legs and feet even when
         you only boxed the torso.
         """
@@ -220,7 +220,7 @@ class FootWatch:
 
     TWO BUGS THIS WENT THROUGH, BOTH WORTH KNOWING ABOUT
     1. The first version compared against a fast-adapting running
-       average. The average simply FOLLOWED the drift down -- by the time
+       average. The average simply FOLLOWED the drift down, so by the time
        the feet had climbed 250px the reference had climbed with them and
        the gap looked tiny. It never fired. A reference you are trying to
        detect movement away from must not chase the movement.
@@ -231,7 +231,7 @@ class FootWatch:
        not evidence that everything is fine.
 
     So the reference is now the median of the OLDEST third of a 3-second
-    window -- old enough that the drift has not polluted it -- and gaps
+    window, old enough that the drift has not polluted it, and gaps
     hold the evidence rather than clearing it.
 
     HONESTY ABOUT THIS CHECK
@@ -239,7 +239,7 @@ class FootWatch:
     exactly one real drift plus three correct runs. Every threshold from
     120px to 200px separated those four cases, so it is not knife-edge,
     but four runs is not a lot. Pose confidence, for what it is worth,
-    does NOT work for this at all -- it sat at 0.97+ while tracking the
+    does NOT work for this at all. It sat at 0.97+ while tracking the
     wrong people, because those people are perfectly real.
     """
 

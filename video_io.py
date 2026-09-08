@@ -3,7 +3,7 @@ video_io.py
 
 Opening a video file and reading frames with their REAL timestamps.
 
-Nothing in here knows about fencers or tracking -- it just turns a file
+Nothing in here knows about fencers or tracking. It just turns a file
 path into frames + times. Keeping it separate means that when you move
 to the iPhone app later, this is the only file that has to be replaced.
 """
@@ -45,7 +45,7 @@ def measure_timebase(path: str) -> dict:
     Decode the clip once, quickly, just to collect each frame's real
     timestamp. Returns the true frame count and the true average fps.
 
-    WHY THIS EXISTS -- this is a real bug fix, not decoration:
+    WHY THIS EXISTS. This is a real bug fix, not decoration:
 
     cv2.CAP_PROP_FPS and cv2.CAP_PROP_FRAME_COUNT come from the file's
     metadata header, and on this iPhone clip BOTH are wrong:
@@ -102,7 +102,7 @@ def get_video_info(cap: cv2.VideoCapture, path: str) -> dict:
 def seek_to(cap: cv2.VideoCapture, index: int):
     """
     Jump to a frame number. Needed because your real clips are whole
-    bouts -- the interesting four seconds are somewhere in the middle of
+    bouts, and the interesting four seconds are somewhere in the middle of
     seventy, and nobody wants to track the standing-around.
 
     Seeking in HEVC is not always exact: the decoder can only jump to a

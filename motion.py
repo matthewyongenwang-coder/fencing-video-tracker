@@ -43,7 +43,7 @@ import numpy as np
 # The gap between the two fencers at the start does not depend on how you
 # drew the boxes. It is roughly fencing distance, so it is a stable
 # stand-in for the scale of the scene. Measured on the two clips here it
-# came out at 1258px and 1233px -- consistent, as you would hope.
+# came out at 1258px and 1233px, consistent, as you would hope.
 #
 # 0.05 x ~1250px is about 63 px/sec, which reproduces the clean labelling
 # the full-body version happened to get. It is HAND-TUNED, not calibrated
@@ -57,7 +57,7 @@ SPEED_WINDOW_SEC = 0.10
 # replaces the current one.
 #
 # WHY: at 30fps, one frame is 33 milliseconds. A fencer cannot reverse
-# direction in 33ms -- that is not footwork, it is the tracking box
+# direction in 33ms. That is not footwork, it is the tracking box
 # wobbling during a blurry lunge. Without this, the labels flickered
 # Forward/Backward/Still on single frames right in the middle of the
 # most interesting part of the clip. 2 frames (~67ms) is still far
@@ -141,7 +141,7 @@ class MovementLabeler:
         Returns (label, signed_speed_px_per_sec).
 
         Speed is positive when moving toward the opponent, negative when
-        moving away. It is in pixels per second -- an on-screen quantity,
+        moving away. It is in pixels per second, an on-screen quantity,
         not a real-world one. Converting it to metres per second would
         need camera calibration and a known reference length on the
         piste, which this prototype does not do.

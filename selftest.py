@@ -6,7 +6,7 @@ clicking a mouse. Run it after changing anything:
 
     python3 selftest.py "/path/to/IMG_1135 3.MOV"
 
-It does NOT test the click-and-drag itself -- that genuinely needs a
+It does NOT test the click-and-drag itself, which genuinely needs a
 hand on a trackpad. It DOES test everything that happens either side of
 the drag, including the coordinate maths that converts a box drawn on a
 shrunk-to-fit window back into full-resolution pixels, and the mid-clip
@@ -53,7 +53,7 @@ def test_display_scaling():
 
     # A box you'd draw on the shrunk window, and where it must land at
     # full resolution. Getting this wrong puts every box in the wrong
-    # place -- silently, because it still looks like a valid box.
+    # place, silently, because it still looks like a valid box.
     drawn = (100, 200, 150, 300)
     inv = 1.0 / scale
     restored = tuple(int(v * inv) for v in drawn)
@@ -372,7 +372,7 @@ def test_detection(video_path):
     for step in range(10):
         right_mover.observe((100.0 + step * 20.0, 500.0), 1 / 30.0, 200)
         left_mover.observe((500.0 - step * 20.0, 500.0), 1 / 30.0, 200)
-    # They are now at 280 and 320 -- almost on top of each other.
+    # They are now at 280 and 320, almost on top of each other.
     for _ in range(6):        # coast through the pass, seeing nobody
         right_mover.coast(1 / 30.0)
         left_mover.coast(1 / 30.0)
@@ -426,8 +426,8 @@ def test_reselection(video_path):
     clean_final = boxes[max(boxes)]
 
     # Now do it again, but deliberately wreck the tracker at frame 40 by
-    # re-seeding it onto a patch of empty floor -- standing in for a real
-    # drift -- and then rescue it at frame 60 the way pressing A would.
+    # re-seeding it onto a patch of empty floor, standing in for a real
+    # drift, and then rescue it at frame 60 the way pressing A would.
     cap = open_video(video_path)
     first = read_first_frame(cap)
     fencer2 = Fencer("Fencer A", (0, 140, 255), first, (235, 425, 215, 470))

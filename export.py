@@ -9,7 +9,7 @@ TWO REAL BUGS FIXED HERE, BOTH FOUND BY MEASURING RATHER THAN ASSUMING:
    The first version passed cv2.CAP_PROP_FPS straight into the writer.
    On this clip that property reports 28.20 fps, but the frames are
    really 29.97 fps apart. The exported video came out 4.256 seconds
-   long instead of 4.003 -- 6.3% slow motion. main.py now passes in the
+   long instead of 4.003, which is 6.3% slow motion. main.py now passes in the
    fps measured from the real timestamps instead.
 
 2. OUTPUT CODEC.
@@ -41,7 +41,7 @@ def open_writer(path: str, fps: float, frame_size: tuple):
 
     Returns (writer, fourcc_name). Raises if none of them work.
 
-    cv2.VideoWriter never raises on a bad codec -- it quietly hands back
+    cv2.VideoWriter never raises on a bad codec. It quietly hands back
     an object whose isOpened() is False and then silently swallows every
     frame you write, leaving a 0-byte file. So isOpened() is checked
     here rather than trusted.
@@ -60,7 +60,7 @@ def open_writer(path: str, fps: float, frame_size: tuple):
     raise IOError(
         f"Could not open a video writer for {path}. "
         f"Last codec tried: {last_error}. "
-        "Your OpenCV build may be missing video encoding support -- "
+        "Your OpenCV build may be missing video encoding support. "
         "reinstall with: pip install --force-reinstall opencv-contrib-python")
 
 
@@ -73,7 +73,7 @@ def verify_output(path: str, expected_frames: int) -> dict:
     genuine check that the file is well-formed video.
 
     (QuickTime playability specifically was confirmed separately using
-    macOS's own AVFoundation framework -- see the README.)
+    macOS's own AVFoundation framework. See the README.)
     """
     if not os.path.exists(path):
         return {"ok": False, "reason": "file was not created"}
@@ -117,7 +117,7 @@ CSV_COLUMNS = [
     "camera_points_used",
     # How much the two fencers' boxes overlap (0 = apart, 1 = identical).
     # A sustained high value means at least one tracker is on the wrong
-    # person -- two fencers cannot be in the same place.
+    # person, because two fencers cannot be in the same place.
     "box_overlap_iou",
     "overlap_warning",
 ]
@@ -132,7 +132,7 @@ for tag in ("a", "b"):
         # THIS one for movement analysis and for the robot project later.
         f"fencer_{tag}_stable_x", f"fencer_{tag}_stable_y",
         # Speed along the piste, positive = toward the opponent.
-        # Pixels per second. NOT metres per second -- no calibration.
+        # Pixels per second, not metres per second. There is no calibration.
         f"fencer_{tag}_speed_px_s",
         f"fencer_{tag}_movement",
         # Only filled in when the tracker actually reports a confidence.
@@ -152,7 +152,7 @@ for tag in ("a", "b"):
         f"fencer_{tag}_feet_x", f"fencer_{tag}_feet_y",
         f"fencer_{tag}_hip_x", f"fencer_{tag}_hip_y",
         f"fencer_{tag}_shoulder_x", f"fencer_{tag}_shoulder_y",
-        # The extended wrist -- the sword hand, guessed from geometry.
+        # The extended wrist, which is the sword hand, guessed from geometry.
         f"fencer_{tag}_sword_wrist_x", f"fencer_{tag}_sword_wrist_y",
         f"fencer_{tag}_sword_elbow_x", f"fencer_{tag}_sword_elbow_y",
         # Reach from shoulders to sword hand, in torso-widths.

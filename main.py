@@ -1,7 +1,7 @@
 """
 main.py
 
-Fencing video tracker -- first working prototype.
+Fencing video tracker.
 
 Pipeline:
     load video  ->  you box each fencer  ->  track both through the clip
@@ -56,7 +56,7 @@ def _scale_for_display(frame, max_width):
     This matters more than it looks. The clip is 1920x1080. On a MacBook
     screen an unscaled OpenCV window is bigger than the display, so the
     bottom of the piste is off-screen and you cannot see what you are
-    boxing. Everything drawn is scaled for viewing only -- all tracking,
+    boxing. Everything drawn is scaled for viewing only. All tracking,
     all CSV numbers, and the exported video stay at full 1920x1080.
     """
     height, width = frame.shape[:2]
@@ -128,7 +128,7 @@ def make_state(fencer, tracked, center, stable, speed, movement):
 FULL_BODY_ASPECT = 1.5
 
 TORSO_ADVICE = (
-    "TIP: box the MASK AND TORSO ONLY -- not the legs, not the blade.\n"
+    "TIP: box the MASK AND TORSO ONLY, not the legs and not the blade.\n"
     "     Measured on your own clips: a full-body box drifted onto the\n"
     "     referee after 49 frames, while a torso box on the same clip\n"
     "     followed the fencer correctly the whole way. Legs swing around\n"
@@ -229,7 +229,7 @@ def main():
     parser.add_argument("--display-width", type=int, default=1280,
                         help="Width of the on-screen window in pixels")
     parser.add_argument("--start-frame", type=int, default=0,
-                        help="Frame to begin at. Your clips are whole bouts; "
+                        help="Frame to begin at. Clips are usually whole bouts; "
                              "the interesting part is rarely at the start.")
     parser.add_argument("--max-frames", type=int, default=0,
                         help="How many frames to process, 0 for all")
@@ -554,7 +554,7 @@ def main():
               "someone else. Watch the exported video to confirm.")
 
     if overlap_events:
-        print(f"\n{len(overlap_events)} overlap warning(s) -- both boxes on "
+        print(f"\n{len(overlap_events)} overlap warning(s), both boxes on "
               f"one person:")
         for idx, t in overlap_events:
             print(f"  frame {idx} (t={t:.2f}s)")

@@ -5,8 +5,8 @@ Estimates how the CAMERA moved between two frames, so that camera
 movement doesn't get counted as fencer movement.
 
 THE PROBLEM THIS SOLVES
-If the camera drifts 10 pixels right, everything in frame -- both
-fencers, the background, the floor -- appears to move 10 pixels left. A
+If the camera drifts 10 pixels right, everything in frame (both
+fencers, the background, the floor) appears to move 10 pixels left. A
 tracker reports that as the fencer moving. Without correcting for it,
 "Fencer A stepped back" and "the camera panned" look identical.
 
@@ -29,7 +29,7 @@ rotate, and zoom together.
 
 HOW IT WORKS (plain version)
 1. Pick a few hundred easy-to-recognise corner points on the floor and
-   walls -- things that genuinely don't move.
+   walls, things that genuinely don't move.
 2. Ignore anything inside the fencers' boxes, so the fencers' own
    movement can't pollute the estimate.
 3. Find where those points went in the next frame (sparse optical flow,
@@ -42,7 +42,7 @@ We then keep a running transform back to the FIRST frame, so any point
 can be converted into "where would this be if the camera had never
 moved". That is what the fencer positions get run through.
 
-LIMITATIONS -- STILL REAL
+LIMITATIONS, STILL REAL
 * No perspective or parallax. The gym floor stretches away from the
   camera, so when a camera moves sideways, near things shift more than
   far things. One transform cannot be right for both depths at once, so
@@ -54,7 +54,7 @@ LIMITATIONS -- STILL REAL
   falls back to the last good transform rather than trusting a bad one.
   It says so in the CSV instead of hiding it.
 * This corrects for camera movement. It does NOT let you measure
-  real-world distance or speed -- everything stays in pixels.
+  real-world distance or speed. Everything stays in pixels.
 """
 
 import cv2

@@ -6,9 +6,9 @@ person, and says so.
 
 WHY THIS EXISTS
 The worst failure in this whole project is not a tracker giving up. It
-is a tracker confidently following the wrong person. On one of your
+is a tracker confidently following the wrong person. On one of my test
 clips, Fencer A's box slid off the fencer at frame 49 and spent the next
-170 frames tracking the referee in the blue suit -- reporting success
+170 frames tracking the referee in the blue suit, reporting success
 the entire time. Nothing in the output said anything was wrong.
 
 WHAT I TRIED THAT DID NOT WORK
@@ -17,7 +17,7 @@ Being honest about this, because it shapes what's here:
 * A limit on how far a box may jump in one frame. Measured on real
   clips: a correct box during a fast lunge jumped 0.284 x its own
   height, and the drifting box jumped 0.356. Too close to separate.
-  Worse, the OTHER drift only jumped 0.194 -- less than the correct
+  Worse, the OTHER drift only jumped 0.194, less than the correct
   lunge. Any threshold either misses real drift or fires on real
   lunges.
 * Comparing the tracker's motion against optical flow of the box
@@ -45,10 +45,10 @@ sustained overlap is reported.
 
 WHAT THIS DOES NOT CATCH
 A single tracker drifting onto a background person while the other one
-stays correct -- like the referee case at frame 49 -- produces no
-overlap and is NOT caught here. That failure is still on you to spot in
-the live window. I would rather ship one check that works than four that
-produce false alarms you learn to ignore.
+stays correct, like the referee case at frame 49, produces no
+overlap and is NOT caught here. That failure still has to be spotted in
+the live window. I would rather have one check that works than four that
+produce false alarms people learn to ignore.
 """
 
 
@@ -82,7 +82,7 @@ class OverlapWatch:
     """
 
     def __init__(self, iou_threshold=0.45, frames_before_warning=8):
-        # 0.45 is a big overlap -- roughly "these boxes are mostly the
+        # 0.45 is a big overlap, roughly "these boxes are mostly the
         # same rectangle". Brushing past each other scores far lower.
         self.iou_threshold = iou_threshold
         # 8 frames is about a quarter of a second at 30fps. A fleche pass

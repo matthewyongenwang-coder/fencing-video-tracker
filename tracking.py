@@ -7,7 +7,7 @@ independent tracker instance.
 WHY CSRT
 OpenCV ships several single-object trackers (KCF, MOSSE, CSRT, ...).
 CSRT is the slowest of the common ones but the best at holding a box
-through motion blur, partial occlusion and some change in size -- all
+through motion blur, partial occlusion and some change in size, and all
 three happen in this clip during the lunge. The whole clip is 4 seconds,
 so CSRT's extra cost is about 8 seconds of processing. That's a fine
 trade. Measured on this Mac: ~14 frames/sec with both trackers running.
@@ -16,7 +16,7 @@ WHY NOT A NEURAL NETWORK (YOLO, pose estimation, etc.)
 It would probably work better, and it is the obvious next step for the
 phone app. But for a first version it would mean a much bigger install,
 a much slower run, and a model that still can't tell your two fencers
-apart from the background ones -- because everybody is wearing the same
+apart from the background ones, because everybody is wearing the same
 white kit. The hard part of this problem is IDENTITY, and manual
 selection solves identity for free. Start there, and add a detector
 later once tracking is trustworthy.
@@ -31,7 +31,7 @@ that looked like this last frame" within its own search region.
 THE LIMITATION, STATED PLAINLY
 "They cannot swap with each other" is NOT the same as "they can never go
 wrong". A CSRT tracker can still drift onto a different person who looks
-similar and is physically close -- and in this clip, everyone is in
+similar and is physically close, and in this clip everyone is in
 identical white kit. If Fencer A walks in front of a background fencer,
 A's tracker may come out the other side following the wrong person, and
 it will report success the whole time, because from its point of view it
@@ -51,15 +51,15 @@ def create_tracker(kind="csrt"):
     """
     Create one tracker instance.
 
-    "csrt"  -- OpenCV's CSRT. No extra files needed. Sticky: it holds on
+    "csrt": OpenCV's CSRT. No extra files needed. Sticky, it holds on
                through blur and partial occlusion. Its weakness is that
                when it does go wrong it goes wrong SILENTLY, reporting
                success while following the wrong person.
 
-    "vit"   -- OpenCV's ViT tracker, a small pretrained neural network
+    "vit": OpenCV's ViT tracker, a small pretrained neural network
                (a 700KB ONNX file in models/). This is using an existing
                released model, not training anything. Measured on your
-               clips it is LESS sticky than CSRT -- it gives up sooner --
+               clips it is LESS sticky than CSRT and gives up sooner, but
                but it fails HONESTLY: it reports the loss and its
                getTrackingScore() collapses. Sometimes a tracker that
                admits defeat is worth more than one that doesn't.

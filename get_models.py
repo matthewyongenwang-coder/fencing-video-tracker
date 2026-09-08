@@ -6,7 +6,7 @@ Downloads the three pretrained models this project uses.
     python3 get_models.py
 
 They are NOT in the repository. Together they are about 42MB, they never
-change, and they are published by OpenCV -- so keeping them in git would
+change, and they are published by OpenCV, so keeping them in git would
 bloat every clone forever to save one command. Run this once after
 cloning.
 
@@ -54,7 +54,7 @@ MODEL_DIR = os.path.join(HERE, "models")
 def _via_urllib(url, target):
     """
     Straight download. Needs a working certificate bundle, which a
-    python.org install on macOS often does NOT have -- it ships without
+    python.org install on macOS often does NOT have. It ships without
     running Install Certificates.command, and every https fetch then
     dies with CERTIFICATE_VERIFY_FAILED. Hence the curl fallback below.
     """

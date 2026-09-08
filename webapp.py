@@ -9,9 +9,10 @@ action, drag a box round each fencer, press Run, watch the result.
 Then open http://127.0.0.1:8765 in your browser.
 
 WHAT THIS IS AND IS NOT
-This is a small server running on YOUR Mac. Nothing is uploaded anywhere,
-there is no account, no cloud, no database. It binds to 127.0.0.1, which
-means only this computer can reach it -- not other machines on the wifi.
+This is a small server running on your own computer. Nothing is uploaded
+anywhere, there is no account, no cloud and no database. It binds to
+127.0.0.1, which
+means only this computer can reach it, not other machines on the wifi.
 
 The browser cannot do the tracking itself, because the tracker is Python
 and OpenCV. So the page is a front end and the work happens in exactly
@@ -25,9 +26,9 @@ Python's own http.server, nothing else. The project still installs with
 two pip packages.
 
 TWO WAYS TO LOAD A CLIP
-* Drop a file on the page -- it gets copied into a working folder.
-* Or paste the file's path -- nothing is copied at all.
-Use the path for big clips. Your competition footage runs to 300MB and
+* Drop a file on the page, which copies it into a working folder.
+* Or paste the file's path, which copies nothing at all.
+Use the path for big clips. Competition footage runs to 300MB and
 copying it achieves nothing when it is already sitting on this disk.
 """
 
@@ -65,7 +66,7 @@ def start_run(job_id, box_a, box_b, start_frame, max_frames, use_detect,
     Launch main.py as a separate process and follow its progress.
 
     Shelling out rather than importing keeps ONE implementation of the
-    tracking loop. The alternative -- a second code path for the web --
+    tracking loop. The alternative, a second code path for the web,
     is how a project ends up with a page and a terminal that quietly
     disagree about what the answer is.
     """
@@ -449,7 +450,7 @@ input[type=range]{flex:1;min-width:220px}
 </style></head><body>
 <header>
   <h1>Fencing Tracker</h1>
-  <p>Runs on your Mac. Nothing is uploaded anywhere. Same code as the terminal.</p>
+  <p>Runs on your own computer. Nothing is uploaded anywhere. Same code as the terminal.</p>
 </header>
 <main>
 
