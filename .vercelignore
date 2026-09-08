@@ -1,0 +1,17 @@
+# Only site/ is deployed. Everything else is the tracker itself, which
+# cannot run on Vercel anyway: functions cap request bodies at 4.5MB and
+# a fencing clip is 5MB to 600MB.
+venv
+models
+docs
+vendor
+webruns
+__pycache__
+output
+output*
+_*
+*.py
+*.md
+!site
+LICENSE
+requirements.txt
