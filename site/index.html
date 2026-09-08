@@ -186,6 +186,13 @@ footer a{color:var(--dim);text-decoration:underline}
            a banner because a banner is not a person.</p>
       </div>
       <div class="card">
+        <h4>Detections are candidates, not answers</h4>
+        <p>The detector does report the printed fencers on the venue's wall
+           posters as people, on 15% of frames. They never get tracked, because a
+           detection also has to overlap the fencer's box, continue their motion,
+           and not already be claimed.</p>
+      </div>
+      <div class="card">
         <h4>Momentum through crossings</h4>
         <p>Two fencers in identical kit passing each other look the same. They are
            carrying momentum in opposite directions though, so the body still

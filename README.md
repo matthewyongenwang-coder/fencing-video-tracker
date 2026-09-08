@@ -174,9 +174,21 @@ cannot drift onto a banner because a banner is not a person.
 
 It finds the fencers even when they are badly smeared: 0.84 confidence on
 the heavily blurred fencer in the San Francisco clip, 0.68 on the
-motion-streaked one in Cincinnati. It also does not report the large
-photographs of fencers on the San Francisco back wall as people, which is
-what I most expected to go wrong.
+motion-streaked one in Cincinnati.
+
+It does report the large photographs of fencers on the San Francisco back
+wall as people, at 0.72 and 0.85 confidence. I originally checked one
+frame, saw no poster detections, and wrote that it was not a problem.
+That was wrong. Checking the whole 150 frame segment, 15% of frames
+return more detections than there are real people in shot, and the extras
+are the printed fencers.
+
+It does not break the tracking, because a detection has to be matched
+before it means anything, and matching needs the fencer's box to already
+overlap it plus motion continuity plus mutual exclusion. A printed fencer
+on a wall is static and nowhere near where a real fencer was predicted, so
+it never gets claimed. Detections are candidates, not conclusions, and
+that is the layer doing the work here.
 
 Four of the five failures are now flagged instead of silent.
 

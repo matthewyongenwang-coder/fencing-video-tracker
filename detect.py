@@ -34,9 +34,23 @@ Measured on this Mac: 37 fps at 416x416 input, 18 fps at 640x640.
 VERIFIED ON THE HARD FOOTAGE
 It finds the fencers even when they are badly smeared: 0.84 confidence on
 the heavily blurred fencer in the San Francisco clip, 0.68 on the
-motion-streaked one in Cincinnati. It also does NOT report the giant
-photographs of fencers on the San Francisco back wall as people, which
-was the thing I most expected to go wrong.
+motion-streaked one in Cincinnati.
+
+IT DOES FIRE ON THE WALL POSTERS, though. The San Francisco venue has
+large printed photographs of fencers behind the piste, and the detector
+reports them as people at 0.72 to 0.85 confidence. Across that 150 frame
+segment, 15% of frames come back with more detections than there are real
+people in shot.
+
+I first checked a single frame, saw no poster detections, and wrote that
+it was not a problem. That was wrong, and it is a good reminder that one
+frame is not a measurement.
+
+It does not break tracking, because match_detections() below needs the
+fencer's existing box to overlap the detection AND the movement to be
+continuous AND the detection to be unclaimed. A printed fencer is static
+and far from where a real fencer was predicted, so nothing ever matches
+it. Detections are candidates, not conclusions.
 
 WHAT IT STILL CANNOT DO
 It finds people. It does not know WHICH person is Fencer A, because every
