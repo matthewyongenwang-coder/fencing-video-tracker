@@ -108,7 +108,8 @@ footer a{color:var(--dim);text-decoration:underline}
     </div>
 
     <div class="cta">
-      <a class="btn primary" href="https://github.com/matthewyongenwang-coder/riposte">Source on GitHub</a>
+      <a class="btn primary" href="app/">Try it in your browser</a>
+      <a class="btn" href="https://github.com/matthewyongenwang-coder/riposte">Source on GitHub</a>
       <a class="btn" href="https://github.com/matthewyongenwang-coder/riposte/blob/main/FILMING.md">How to film for it</a>
       <a class="btn" href="#results">What it gets right and wrong</a>
     </div>
@@ -267,6 +268,17 @@ python3 get_models.py</code></pre>
     <p>Two pip packages. The pretrained models are fetched at setup and none of
        them were trained by this project. It runs entirely on your own computer,
        with no accounts and nothing uploaded anywhere.</p>
+
+    <h3>Or run it in the browser</h3>
+    <p>There is a <a href="app/">browser version</a> that needs no install at all.
+       The video is read straight off your disk and never uploaded, so clip size
+       does not matter. It uses a lighter detector than the Python version, which
+       is faster to load but loses fencers more often. On the fleche clip it
+       tracked Fencer A correctly the whole way and lost Fencer B at the crossing,
+       where the Python version holds both. It says so rather than guessing.</p>
+    <p>It needs a GPU path in the browser. Measured on an M-series Mac: 46 frames
+       per second on the GPU, 19 on the CPU fallback. Without either it will not
+       be usable.</p>
   </div>
 </section>
 
