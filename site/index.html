@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riposte, fencing video tracking</title>
+<meta name="description" content="Track two fencers through competition video. Person-detection-gated tracking, momentum through crossings, body landmarks, and honest reporting when it loses them.">
+<meta property="og:title" content="Riposte, fencing video tracking">
+<meta property="og:description" content="Track two fencers through competition video, measured against footage from four competitions.">
+<meta property="og:image" content="demo.gif">
+<style>
+:root{
+  --bg:#0f1116; --panel:#171a21; --line:#252a34; --ink:#e8eaef;
+  --dim:#9aa2b1; --accent:#ff8c3c; --blue:#5b9bff; --ok:#42c07a; --bad:#ff6b6b;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:880px;margin:0 auto;padding:0 24px}
+a{color:var(--blue)}
+a:hover{color:#8bb8ff}
+
+header{padding:76px 0 44px;border-bottom:1px solid var(--line)}
+h1{margin:0;font-size:44px;line-height:1.1;letter-spacing:-0.02em;font-weight:700}
+h1 .dot{color:var(--accent)}
+.tag{margin:14px 0 0;font-size:19px;color:var(--dim);max-width:620px}
+.by{margin:22px 0 0;font-size:14px;color:var(--dim)}
+
+.figure{margin:36px 0 0}
+.figure img{width:100%;border-radius:10px;border:1px solid var(--line);display:block}
+.cap{margin:10px 0 0;font-size:13px;color:var(--dim)}
+
+.cta{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0 0}
+.btn{
+  display:inline-block;padding:11px 18px;border-radius:8px;text-decoration:none;
+  font-size:15px;font-weight:600;border:1px solid var(--line);color:var(--ink);
+  background:var(--panel);
+}
+.btn:hover{background:#1f232c;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#2a1400}
+.btn.primary:hover{background:#ff9f5c;color:#2a1400}
+
+section{padding:52px 0;border-bottom:1px solid var(--line)}
+h2{font-size:13px;text-transform:uppercase;letter-spacing:.1em;color:var(--dim);
+   margin:0 0 20px;font-weight:600}
+h3{font-size:20px;margin:32px 0 10px;font-weight:600}
+p{margin:0 0 16px;max-width:680px}
+ul{margin:0 0 16px;padding-left:20px;max-width:680px}
+li{margin:0 0 7px}
+
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:0 0 18px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);
+      vertical-align:top}
+th{color:var(--dim);font-weight:600;font-size:12.5px;text-transform:uppercase;
+   letter-spacing:.06em}
+td code{font-size:13px}
+.bad{color:var(--bad)}
+.ok{color:var(--ok)}
+
+code{background:#0b0d12;border:1px solid var(--line);border-radius:4px;
+     padding:1px 5px;font-size:14px;
+     font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{background:#0b0d12;border:1px solid var(--line);border-radius:8px;
+    padding:15px 17px;overflow-x:auto;font-size:14px;margin:0 0 18px}
+pre code{background:none;border:none;padding:0}
+
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:17px}
+.card h4{margin:0 0 7px;font-size:15px;font-weight:600}
+.card p{margin:0;font-size:14px;color:var(--dim)}
+
+.stat{font-size:30px;font-weight:700;letter-spacing:-0.01em}
+.stat.a{color:var(--accent)} .stat.g{color:var(--ok)}
+.stat-label{font-size:13px;color:var(--dim);margin-top:2px}
+
+footer{padding:40px 0 64px;color:var(--dim);font-size:14px}
+footer a{color:var(--dim);text-decoration:underline}
+
+@media (max-width:600px){
+  header{padding:48px 0 32px}
+  h1{font-size:32px}
+  .tag{font-size:17px}
+  table{font-size:13px}
+  th,td{padding:7px 8px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <h1 id="name">Riposte<span class="dot">.</span></h1>
+    <p class="tag">Track two fencers through competition video. Pick them once,
+       and it follows them, writes out an annotated clip and a CSV of positions
+       and speeds, and tells you when it has lost them.</p>
+    <p class="by">An open source computer vision project by Matthew Wang.
+       Python and OpenCV.</p>
+
+    <div class="figure">
+      <img src="demo.gif" alt="Two fencers tracked through a bout with labelled boxes and body landmarks">
+      <p class="cap">A real bout from a Portland C2 competition. Orange and blue
+         boxes hold each fencer's identity, the stick figures are body landmarks,
+         red marks the sword hand and yellow marks the feet.</p>
+    </div>
+
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/matthewyongenwang-coder/fencing-video-tracker">Source on GitHub</a>
+      <a class="btn" href="https://github.com/matthewyongenwang-coder/fencing-video-tracker/blob/main/FILMING.md">How to film for it</a>
+      <a class="btn" href="#results">What it gets right and wrong</a>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2>Why I built it</h2>
+    <p>I fence sabre and I film a lot of my bouts. I wanted something that could
+       follow both fencers automatically so I could pull numbers out of the
+       footage instead of scrubbing through it by hand.</p>
+    <p>The hard part turned out not to be following a fencer. It was knowing when
+       the tracker had stopped following the right one.</p>
+  </div>
+</section>
+
+<section id="results">
+  <div class="wrap">
+    <h2>What the measurements showed</h2>
+    <p>I built a benchmark from five segments across four competitions, chosen to
+       be difficult: fencers between 100 and 450 pixels tall, one clip at 960x544,
+       heavy motion blur, hand held panning, and a back wall covered in large
+       photographs of other fencers.</p>
+
+    <p>My first version kept only 5 of 10 fencer tracks on the right person. Every
+       single failure landed on the same kind of thing, and none of them reported
+       a problem.</p>
+
+    <table>
+      <tr><th>Case</th><th>What the box ended up on</th></tr>
+      <tr><td>portland-fleche A</td><td class="bad">a referee standing still</td></tr>
+      <tr><td>seattle-lowres B</td><td class="bad">a spectator's dark hair</td></tr>
+      <tr><td>sf-blur-posters A</td><td class="bad">the ceiling edge</td></tr>
+      <tr><td>sf-blur-posters B</td><td class="bad">the scoreboard</td></tr>
+      <tr><td>cincy-pan-blur A</td><td class="bad">a sponsor banner</td></tr>
+    </table>
+
+    <p>Banners, scoreboards and ceiling edges are static and high contrast, and a
+       template tracker prefers them to a blurred fencer mid lunge. All five
+       reported success the entire time, which is worse than failing.</p>
+
+    <h3>Things I tried that did not work</h3>
+    <p>I am listing these because they are the reason there is one automatic check
+       in the code instead of five.</p>
+    <table>
+      <tr><th>Idea</th><th>Why it failed</th></tr>
+      <tr><td>Cap how far a box may jump per frame</td>
+          <td>A correct box during a lunge jumped 0.284 times its own height. The
+              drifting box jumped 0.356. The other drift jumped 0.194, less than
+              the correct lunge.</td></tr>
+      <tr><td>Compare tracker motion against optical flow</td>
+          <td>Correct tracking during a blurry lunge disagreed by 116px. A real
+              drift disagreed by 157px.</td></tr>
+      <tr><td>Make the tracker give up sooner</td>
+          <td>At one threshold nothing changed. At the next it declared failure at
+              frame 30, in the middle of a good lunge.</td></tr>
+      <tr><td>Use pose confidence as a warning</td>
+          <td>It stayed above 0.97 the whole time a box tracked the wrong people,
+              because those people are real bodies.</td></tr>
+    </table>
+    <p>None of them separated a real drift from a real lunge. Tuning was not the
+       answer.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What actually fixed it</h2>
+    <div class="grid">
+      <div class="card">
+        <h4>Only track people</h4>
+        <p>A person detector runs every frame. A fencer's box has to contain a
+           detected body, or that fencer is declared lost. A box cannot drift onto
+           a banner because a banner is not a person.</p>
+      </div>
+      <div class="card">
+        <h4>Momentum through crossings</h4>
+        <p>Two fencers in identical kit passing each other look the same. They are
+           carrying momentum in opposite directions though, so the body still
+           travelling right is still Fencer A.</p>
+      </div>
+      <div class="card">
+        <h4>One body, one fencer</h4>
+        <p>A detected person can be claimed by at most one fencer, so both boxes
+           can never collapse onto the same body.</p>
+      </div>
+      <div class="card">
+        <h4>Camera movement removed</h4>
+        <p>Slide, rotation and zoom are measured and subtracted before any fencer
+           movement is calculated. One test clip drifted 9.2% in zoom alone.</p>
+      </div>
+    </div>
+
+    <h3>Measured on the crossing clip</h3>
+    <table>
+      <tr><th></th><th>Before</th><th>After</th></tr>
+      <tr><td>Peak overlap between the two boxes</td>
+          <td class="bad">collapsed onto one person</td>
+          <td class="ok">0.24, never merged</td></tr>
+      <tr><td>Fencer A at the end</td>
+          <td class="bad">silently tracking a referee</td>
+          <td class="ok">declared lost</td></tr>
+      <tr><td>Identity through the pass</td>
+          <td class="bad">close to a coin flip</td>
+          <td class="ok">both boxes on the correct fencers</td></tr>
+    </table>
+    <p>Four of the five original failures are now flagged instead of silent.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Filming matters more than the code</h2>
+    <p>I measured the filming conditions of every test clip frame by frame and
+       lined them up against what happened. One clip tracked both fencers cleanly,
+       and it is also the only one filmed with a pan under 10 px/s and no zoom.</p>
+    <table>
+      <tr><th>Clip</th><th>Pan speed</th><th>Zoom drift</th><th>Result</th></tr>
+      <tr><td>Portland, steady</td><td>5.5 px/s</td><td>0.1%</td>
+          <td class="ok">both tracked</td></tr>
+      <tr><td>Portland, fleche</td><td>40.6 px/s</td><td>12.2%</td>
+          <td class="bad">A lost late</td></tr>
+      <tr><td>Seattle D2</td><td>41.6 px/s</td><td>0.1%</td>
+          <td class="bad">B drifted onto a spectator</td></tr>
+      <tr><td>SF AFM</td><td>93.6 px/s</td><td>7.5%</td>
+          <td class="bad">both failed</td></tr>
+    </table>
+    <p>One surprise: resolution is not the bottleneck. The Seattle clip is only
+       960x544 and the detector still found the fencers on 100% of frames, the
+       best score of any clip. The full guide is in
+       <a href="https://github.com/matthewyongenwang-coder/fencing-video-tracker/blob/main/FILMING.md">FILMING.md</a>.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Run it yourself</h2>
+    <pre><code>git clone https://github.com/matthewyongenwang-coder/fencing-video-tracker.git
+cd fencing-video-tracker
+python3 -m venv venv &amp;&amp; source venv/bin/activate
+pip install -r requirements.txt
+python3 get_models.py</code></pre>
+    <p>Then either open the local web page, where you drop in a clip, scrub to the
+       action and drag a box around each fencer:</p>
+    <pre><code>python3 webapp.py</code></pre>
+    <p>Or run it from the terminal:</p>
+    <pre><code>python3 main.py "bout.MOV" --detect --pose</code></pre>
+    <p>Two pip packages. The pretrained models are fetched at setup and none of
+       them were trained by this project. It runs entirely on your own computer,
+       with no accounts and nothing uploaded anywhere.</p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>What it still cannot do</h2>
+    <ul>
+      <li>A crossing is still the hardest moment and worth checking by eye.</li>
+      <li>A box can drift onto a different person standing where the fencer was
+          predicted. A spectator is a real person, so nothing objects.</li>
+      <li>Nothing here tells my fencers apart from every other fencer in the hall.</li>
+      <li>Blade actions are not recoverable at 30fps. The blade is 2 to 3 pixels
+          wide when still and gone entirely during a lunge. That is the footage,
+          not the algorithm, and slow motion is the fix.</li>
+      <li>Five clips is not a large sample.</li>
+    </ul>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>MIT licensed. Source, benchmark and filming guide on
+       <a href="https://github.com/matthewyongenwang-coder/fencing-video-tracker">GitHub</a>.
+       Built by Matthew Wang.</p>
+  </div>
+</footer>
+
+</body>
+</html>
