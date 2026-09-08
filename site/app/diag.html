@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8"><title>crossing diagnostic</title>
+<style>body{font:12px ui-monospace,Menlo,monospace;background:#111;color:#ddd;padding:16px}
+#log{white-space:pre;line-height:1.5}.bad{color:#ff6b6b}.ok{color:#5ec87a}</style></head>
+<body><div id="log">running…</div>
+<video id="vid" muted playsinline style="display:none"></video>
+<canvas id="work" style="display:none"></canvas>
+<script type="module">
+import { DetectionGate, OverlapWatch, PisteAxis, MovementLabeler, CameraShift,
+         StableFrame, intersectionOverUnion } from './riposte.js';
+const log=document.getElementById('log'), say=s=>log.textContent+='\n'+s;
+const vid=document.getElementById('vid'), work=document.getElementById('work');
+const wctx=work.getContext('2d',{willReadFrequently:true});
+// Load through a blob, the same way the app does when you drop a file.
+// Serving the clip over plain HTTP does not work here: python's
+// http.server ignores Range requests, so the browser cannot seek and every
+// frame comes back as frame zero. That is what made an earlier version of
+// this harness report identical numbers for every configuration.
+vid.src = URL.createObjectURL(await (await fetch('testclip.mp4')).blob());
+await new Promise(r=>vid.readyState>=2?r():vid.addEventListener('loadeddata',r,{once:true}));
+work.width=vid.videoWidth; work.height=vid.videoHeight;
+function nextFrame(t){return new Promise(res=>{let d=false;
+  const fin=x=>{if(!d){d=true;vid.removeEventListener('seeked',s);res(x);}};
+  const s=()=>fin(vid.currentTime); vid.addEventListener('seeked',s);
+  if(vid.requestVideoFrameCallback) vid.requestVideoFrameCallback((n,m)=>fin(m.mediaTime));
+  if(Math.abs(vid.currentTime-t)<1e-4){fin(vid.currentTime);return;}
+  vid.currentTime=t; setTimeout(()=>fin(vid.currentTime),2000);});}
+
+const ort=await import('https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/ort.webgpu.min.mjs');
+ort.env.wasm.wasmPaths='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+const sess=await ort.InferenceSession.create('yolox_person.onnx',{executionProviders:['webgpu']});
+const SZ=640,grids=[],strides=[];
+for(const s of[8,16,32]){const g=SZ/s;for(let y=0;y<g;y++)for(let x=0;x<g;x++){grids.push(x,y);strides.push(s);}}
+const off=new OffscreenCanvas(SZ,SZ),o=off.getContext('2d',{willReadFrequently:true});
+const plane=SZ*SZ,chw=new Float32Array(3*plane);
+const iou2=(a,b)=>{const x1=Math.max(a.x,b.x),y1=Math.max(a.y,b.y),x2=Math.min(a.x+a.w,b.x+b.w),
+  y2=Math.min(a.y+a.h,b.y+b.h);if(x2<=x1||y2<=y1)return 0;const v=(x2-x1)*(y2-y1);
+  return v/(a.w*a.h+b.w*b.h-v);};
+async function detect(){
+  const sc=Math.min(SZ/work.width,SZ/work.height);
+  o.fillStyle='rgb(114,114,114)';o.fillRect(0,0,SZ,SZ);
+  o.drawImage(work,0,0,Math.round(work.width*sc),Math.round(work.height*sc));
+  const d=o.getImageData(0,0,SZ,SZ).data;
+  for(let i=0;i<plane;i++){chw[i]=d[i*4+2];chw[plane+i]=d[i*4+1];chw[2*plane+i]=d[i*4];}
+  const f={};f[sess.inputNames[0]]=new ort.Tensor('float32',chw,[1,3,SZ,SZ]);
+  const raw=(await sess.run(f))[sess.outputNames[0]].data;const bx=[];
+  for(let i=0;i<grids.length/2;i++){const b=i*85,s2=raw[b+4]*raw[b+5];if(s2<0.30)continue;
+    const st=strides[i],cx=(raw[b]+grids[i*2])*st,cy=(raw[b+1]+grids[i*2+1])*st;
+    const w=Math.exp(raw[b+2])*st,h=Math.exp(raw[b+3])*st;
+    bx.push({box:{x:(cx-w/2)/sc,y:(cy-h/2)/sc,w:w/sc,h:h/sc},score:s2});}
+  bx.sort((a,b)=>b.score-a.score);const k=[];
+  for(const b of bx) if(!k.some(q=>iou2(q.box,b.box)>0.5)) k.push(b);
+  return k;
+}
+const A={x:255,y:425,w:205,h:240},B={x:1490,y:400,w:200,h:210};
+const fencers=[{label:'A',box:{...A},tracked:true},{label:'B',box:{...B},tracked:true}];
+const centre=f=>({x:f.box.x+f.box.w/2,y:f.box.y+f.box.h/2});
+const axis=new PisteAxis(centre(fencers[0]),centre(fencers[1]));
+const lab=[new MovementLabeler(axis,1),new MovementLabeler(axis,-1)];
+const gate=new DetectionGate(),ov=new OverlapWatch(),cam=new CameraShift(),st=new StableFrame();
+say('fr  |dets| A cx  st        | B cx  st        | IoU  | nearest det to A / B');
+let prev=null,target=0;
+for(let i=0;i<221;i++){
+  const t=await nextFrame(target); target+=1/30; if(target>vid.duration)break;
+  wctx.drawImage(vid,0,0);
+  const dets=await detect();
+  const dt=prev===null?1/30:Math.max(t-prev,1e-3); prev=t;
+  st.accumulate(cam.update(work,fencers.map(f=>f.box)));
+  const rep=gate.step(fencers,dets,dt,st);
+  fencers.forEach((f,j)=>lab[j].update(t,st.stabilise(centre(f)),f.tracked));
+  const io=intersectionOverUnion(fencers[0].box,fencers[1].box);
+  ov.update(fencers[0].box,fencers[1].box,fencers[0].tracked&&fencers[1].tracked);
+  if(i>=95&&i<=200&&i%3===0){
+    const state=j=>rep[j].lost?'LOST ':(rep[j].coasting?`${rep[j].merging?'merge':'coast'}${rep[j].coasting}`:(rep[j].matched?'ok   ':'--   '));
+    // which detection index each fencer sits inside
+    const which=f=>{let best=-1,bi=0;dets.forEach((d,k)=>{const c=iou2(f.box,d.box);if(c>bi){bi=c;best=k;}});return best;};
+    say(`${String(i).padStart(3)} | ${String(dets.length).padStart(2)} | `+
+        `${String(Math.round(centre(fencers[0]).x)).padStart(4)} ${state(0)} | `+
+        `${String(Math.round(centre(fencers[1]).x)).padStart(4)} ${state(1)} | `+
+        `${io.toFixed(2)} | ${which(fencers[0])} / ${which(fencers[1])}`);
+  }
+}
+say('\nDONE'); window.DIAG_DONE=true;
+</script></body></html>

@@ -83,6 +83,11 @@ export function torsoFromPerson(person, keepSize) {
  * velocity, the prediction overshot, and the fencer coasted further off.
  */
 export function matchDetections(current, detections, maxMove, predicted) {
+  // maxMove may be one number for everyone, or one per fencer. Per fencer
+  // matters because a fencer we have not seen for a while could be
+  // anywhere within a widening circle, while one we saw last frame could
+  // not have gone far.
+  const limitFor = i => Array.isArray(maxMove) ? maxMove[i] : maxMove;
   const candidates = [];
   current.forEach((box, fi) => {
     if (!box) return;
@@ -91,15 +96,40 @@ export function matchDetections(current, detections, maxMove, predicted) {
 
     detections.forEach((det, di) => {
       let best = null;
+      const limit = limitFor(fi);
       for (const option of options) {
         const inside = containment(option, det.box);
-        if (inside < 0.45) continue;
         const torso = torsoFromPerson(det.box, { w: option.w, h: option.h });
         const move = Math.hypot(
           torso.x + torso.w / 2 - (option.x + option.w / 2),
           torso.y + torso.h / 2 - (option.y + option.h / 2));
-        if (move > maxMove) continue;
-        const score = inside + 0.3 * det.score - (move / Math.max(maxMove, 1)) * 0.5;
+        if (move > limit) continue;
+
+        // Two ways to accept a detection, and it needs only one.
+        //
+        // Containment is the strict one: the box we are holding is mostly
+        // inside this person. That is the right test when tracking is
+        // going well.
+        //
+        // It is the wrong test during a fast pass. The box lags the
+        // fencer by a frame or two, containment drops under the
+        // threshold, and the fencer is dropped while standing in plain
+        // sight. Measured on the fleche clip: Fencer A stopped matching
+        // any of THIRTEEN detected people, coasted until it ran out of
+        // patience, and was declared lost. The fencers were 522px apart
+        // at the time, so nothing was merged. The match was just too
+        // fussy.
+        //
+        // So also accept a detection whose torso lands close to where
+        // this fencer is or is predicted to be. `move` is already capped
+        // above, so this cannot reach across the hall.
+        const near = move < 0.6 * option.h;
+        if (inside < 0.45 && !near) continue;
+
+        // Containment still scores higher, so a confident overlap beats a
+        // merely nearby body when both are on offer.
+        const score = Math.max(inside, near ? 0.45 : 0) + 0.3 * det.score
+                      - (move / Math.max(limit, 1)) * 0.5;
         if (best === null || score > best) best = score;
       }
       if (best !== null) candidates.push([best, fi, di]);
@@ -187,7 +217,8 @@ export class FencerMotion {
 // ----------------------------------------------------------------------
 
 export class DetectionGate {
-  constructor({ giveUpAfter = 20, resnapBelowIou = 0.55, maxCoastFrames = 15 } = {}) {
+  constructor({ giveUpAfter = 20, resnapBelowIou = 0.55, maxCoastFrames = 15,
+                maxMergeFrames = 60 } = {}) {
     // 20 frames is about 0.7 seconds. It was 12 in an earlier version and
     // that was too impatient: detector recall on a clip that tracks
     // perfectly is about 94%, and the misses are the deep lunge frames
@@ -196,6 +227,11 @@ export class DetectionGate {
     this.giveUpAfter = giveUpAfter;
     this.resnapBelowIou = resnapBelowIou;
     this.maxCoastFrames = maxCoastFrames;
+    // How long to keep coasting when the two fencers are inside the SAME
+    // detection. A fleche pass regularly takes longer than half a second,
+    // and going LOST in the middle of one is the wrong answer: we know
+    // exactly where both fencers are, they are just in the same box.
+    this.maxMergeFrames = maxMergeFrames;
     this.motion = [new FencerMotion(), new FencerMotion()];
     this.noBody = [0, 0];
     this.lost = [false, false];
@@ -217,6 +253,7 @@ export class DetectionGate {
     const remembered = this.lastPerson[i];
     const box = fencers[i].box;
     if (!remembered) return null;
+    const other = fencers[1 - i];
     const cx = box.x + box.w / 2, cy = box.y + box.h / 2;
     const radius = this.recoverRadius * box.h;
     let best = null, bestDistance = Infinity;
@@ -224,6 +261,14 @@ export class DetectionGate {
       if (claimed.has(di)) return;
       const ratio = det.box.h / remembered.h;
       if (ratio < 0.6 || ratio > 1.7) return;
+      // Never recover onto the person the other fencer is already on.
+      // Checking the claimed set is not enough, because if the other
+      // fencer is coasting their detection was never claimed, and this is
+      // exactly how both boxes end up on one fencer.
+      if (other.tracked) {
+        const theirs = torsoFromPerson(det.box, { w: other.box.w, h: other.box.h });
+        if (intersectionOverUnion(theirs, other.box) > 0.30) return;
+      }
       const d = Math.hypot(det.box.x + det.box.w / 2 - cx,
                            det.box.y + det.box.h * 0.30 - cy);
       if (d > radius || d >= bestDistance) return;
@@ -251,17 +296,57 @@ export class DetectionGate {
     });
 
     const current = fencers.map(f => f.box);
-    const maxMove = 0.45 * Math.max(...current.map(b => b.h));
+
+    // How far each fencer is allowed to have moved since we last had a
+    // fix on them. This widens the longer they have been coasting.
+    //
+    // A fixed cap is wrong, and it is what broke the crossing. Momentum
+    // predicts a straight line, and a lunge is not a straight line: the
+    // fencer drives forward, then reverses and recovers. On the fleche
+    // clip Fencer A's box carried on rightward at x=565 while the real
+    // fencer had turned and gone back to x=333. That is 230 pixels, the
+    // cap was 108, so the correct body was rejected on every frame and
+    // the fencer was declared lost while standing in plain sight.
+    //
+    // Widening with time is the standard answer: the longer since a real
+    // observation, the less we know, so the further we should be willing
+    // to look. It stays bounded, so it never becomes "match anyone".
+    const maxMove = fencers.map((f, i) => {
+      const coasted = this.motion[i].coasting;
+      const base = 0.45 * Math.max(...current.map(b => b.h));
+      return base * Math.min(1 + coasted * 0.30, 4.0);
+    });
     const matched = matchDetections(current, detections, maxMove, predicted);
     const claimed = new Set();
     matched.forEach(m => { if (m) claimed.add(detections.findIndex(d => d.box === m)); });
+
+    // ARE THEY CROSSING?
+    //
+    // When two fencers run past each other the detector stops seeing two
+    // people and returns one box round both of them. Only one fencer can
+    // claim it, so the other has nothing to match, coasts, runs out of
+    // patience and is declared lost. That is what actually broke the
+    // crossing here: not the matching, the giving up.
+    //
+    // A merge is easy to recognise. One detection contains both fencers'
+    // centres, and it is wider than one fencer has any business being.
+    // While that is true, an unmatched fencer is not missing. We know
+    // where they are, they are in that box, so keep coasting on momentum
+    // and do not start the clock on declaring them lost.
+    const centreOf = b => ({ x: b.x + b.w / 2, y: b.y + b.h / 2 });
+    const inside = (p, b) => p.x >= b.x && p.x <= b.x + b.w &&
+                             p.y >= b.y && p.y <= b.y + b.h;
+    const centres = fencers.map((f, i) => centreOf(predicted[i] || f.box));
+    const merging = detections.some(d =>
+      centres.every(c => inside(c, d.box)) &&
+      d.box.w > 1.4 * Math.max(...fencers.map(f => f.box.w)));
 
     return fencers.map((fencer, i) => {
       const wasLost = this.lost[i];
       const person = matched[i];
       const info = { matched: !!person, snapped: false, lost: wasLost,
                      newlyLost: false, recovered: false, coasting: 0,
-                     speed: this.motion[i].speed() };
+                     merging: false, speed: this.motion[i].speed() };
 
       if (!person) {
         // Already given up on this one? Try to pick them up again.
@@ -296,10 +381,13 @@ export class DetectionGate {
           }
         }
 
-        this.noBody[i] += 1;
-        // Coast through the gap. This is what gets a fencer through a
-        // crossing, where the detector may merge two bodies for a while.
-        if (this.motion[i].position && this.motion[i].coasting < this.maxCoastFrames) {
+        // Only start counting toward "lost" if this is a genuine
+        // disappearance rather than a crossing.
+        if (!merging) this.noBody[i] += 1;
+        info.merging = merging;
+
+        const coastLimit = merging ? this.maxMergeFrames : this.maxCoastFrames;
+        if (this.motion[i].position && this.motion[i].coasting < coastLimit) {
           const c = this.motion[i].coast(dt);
           const onScreen = toScreen(c);
           fencer.box = { x: Math.round(onScreen.x - fencer.box.w / 2),

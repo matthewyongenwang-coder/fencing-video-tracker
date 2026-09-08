@@ -3,7 +3,7 @@
 <style>body{font:13px ui-monospace,Menlo,monospace;background:#111;color:#ddd;padding:18px}
 #log{white-space:pre-wrap;line-height:1.6}.ok{color:#5ec87a}.bad{color:#ff6b6b}.dim{color:#888}</style>
 </head><body><div id="log">running…</div>
-<video id="vid" src="testclip.mp4" muted playsinline></video>
+<video id="vid" muted playsinline></video>
 <canvas id="work"></canvas>
 <style>video,canvas{display:none}</style>
 <script type="module">
@@ -14,6 +14,12 @@ const vid=document.getElementById('vid'), work=document.getElementById('work');
 const wctx=work.getContext('2d',{willReadFrequently:true});
 window.EVAL={};
 
+// Load through a blob, the same way the app does when you drop a file.
+// Serving the clip over plain HTTP does not work here: python's
+// http.server ignores Range requests, so the browser cannot seek and every
+// frame comes back as frame zero. That is what made an earlier version of
+// this harness report identical numbers for every configuration.
+vid.src = URL.createObjectURL(await (await fetch('testclip.mp4')).blob());
 await new Promise(r=>vid.readyState>=2?r():vid.addEventListener('loadeddata',r,{once:true}));
 work.width=vid.videoWidth; work.height=vid.videoHeight;
 
