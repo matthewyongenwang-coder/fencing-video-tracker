@@ -180,6 +180,12 @@ def run_case(name, path, start, count, box_a, box_b, tracker="csrt",
         "name": name,
         "frames": count,
         "losses": losses,
+        # The gate's verdict. This was computed and then dropped on the
+        # floor, so the table showed 0/0 on every case while main.py was
+        # recording real LOST events on three of the five. Saying LOST
+        # instead of pretending is the part of this program I care about
+        # most, and the benchmark was not reporting it at all.
+        "declared_lost": declared_lost,
         "overlap_warnings": overlap_warnings,
         "foot_warnings": foot_warnings,
         "final": [f.box for f in fencers],
@@ -214,8 +220,13 @@ def main():
 
     print(f"tracker={args.tracker}  pose={'on' if args.pose else 'off'}  "
           f"detect={'on' if args.detect else 'off'}\n")
-    header = (f"{'case':18} {'frames':>6} {'lost A/B':>10} {'overlap':>8} "
-              f"{'feet A/B':>9} {'snaps':>6} {'no-body A/B':>12}")
+    # 'LOST A/B' is the gate declaring it cannot find the fencer, which
+    # is the verdict that matters. 'csrt A/B' is the tracker's own failure
+    # count, which is a much weaker signal: CSRT reports success right up
+    # until it is confidently following a referee.
+    header = (f"{'case':18} {'frames':>6} {'LOST A/B':>10} {'csrt A/B':>10} "
+              f"{'overlap':>8} {'feet A/B':>9} {'snaps':>6} "
+              f"{'no-body A/B':>12}")
     print(header)
     print("-" * len(header))
 
@@ -225,7 +236,10 @@ def main():
         if "error" in result:
             print(f"{result['name']:18} ERROR: {result['error']}")
             continue
+        declared = result.get("declared_lost", [False, False])
         print(f"{result['name']:18} {result['frames']:6} "
+              f"{'YES' if declared[0] else '  .':>4}/"
+              f"{'YES' if declared[1] else '.':<5} "
               f"{result['losses'][0]:4}/{result['losses'][1]:<5} "
               f"{result['overlap_warnings']:8} "
               f"{result['foot_warnings'][0]:4}/{result['foot_warnings'][1]:<4} "
