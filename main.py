@@ -35,6 +35,7 @@ from verify import OverlapWatch
 from pose import PoseEstimator, FootWatch, SKELETON
 from detect import DetectionGate
 from export import open_writer, verify_output, TrackingCsv
+from runtrace import TraceWriter, model_hashes
 
 LABEL_A = "Fencer A"
 LABEL_B = "Fencer B"
@@ -244,6 +245,9 @@ def main():
                         help="Also find body landmarks (feet, wrists, joints). "
                              "Roughly halves speed. Draws a stick figure and "
                              "adds pose columns to the CSV.")
+    parser.add_argument("--trace", default=None,
+                        help="Write a machine-checkable JSON record of the "
+                             "run to this path. See runtrace.py.")
     parser.add_argument("--tracker", choices=["csrt", "vit"], default="csrt",
                         help="csrt (default, sticky but fails silently) or "
                              "vit (gives up sooner but reports a real score)")
@@ -331,6 +335,26 @@ def main():
           f"{info['measured_fps']:.2f} fps")
     csv_out = TrackingCsv(out_csv)
 
+    tracer = None
+    if args.trace:
+        tracer = TraceWriter(args.trace, {
+            "engine": "python",
+            "video_name": os.path.basename(args.video_path),
+            "width": info["width"],
+            "height": info["height"],
+            "measured_fps": round(info["measured_fps"], 4),
+            "metadata_fps": round(info["metadata_fps"], 4),
+            "frame_count": info["frame_count"],
+            "start_frame": args.start_frame,
+            "max_frames": args.max_frames,
+            "seed_box_a": list(box_a),
+            "seed_box_b": list(box_b),
+            "detect": bool(args.detect),
+            "pose": bool(args.pose),
+            "tracker": args.tracker,
+            "models": model_hashes(),
+        })
+
     window = "Fencing tracker"
     if show:
         cv2.namedWindow(window, cv2.WINDOW_NORMAL)
@@ -387,6 +411,11 @@ def main():
                           f"frame. That usually means the box has wandered "
                           f"onto someone in the background.")
                     feet_events.append((frame_index, time_sec, fencer.label))
+                    if tracer:
+                        tracer.add_event("FEET", frame_index, time_sec,
+                                         fencer.label,
+                                         round(foot_watches[idx].reference
+                                               - feet_y, 1))
                     if show:
                         paused = True
                         print("       Paused. Re-select with A or B.")
@@ -395,27 +424,40 @@ def main():
         #     cannot find one. See detect.py for why this matters most.
         if gate is not None:
             gate_report = gate.step(frame, fencers, camera_tracker, dt)
-            for idx, (fencer, info) in enumerate(zip(fencers, gate_report)):
+            # Named gate_info, not info: `info` is the video's own
+            # metadata dict, used for measured_fps and frame size. Binding
+            # it here silently replaced it for the rest of the run.
+            for idx, (fencer, gate_info) in enumerate(zip(fencers, gate_report)):
                 states[idx]["box"] = fencer.box
                 states[idx]["tracked"] = fencer.tracked
-                states[idx]["detected"] = info["matched"]
-                if info["snapped"]:
+                states[idx]["detected"] = gate_info["matched"]
+                if gate_info["snapped"]:
+                    if tracer:
+                        tracer.add_event("SNAP", frame_index, time_sec,
+                                         fencer.label)
                     labelers[idx].reset()
                     if foot_watches[idx] is not None:
                         foot_watches[idx].reset()
-                if info["newly_lost"]:
+                if gate_info["newly_lost"]:
                     print(f"[frame {frame_index}, t={time_sec:.2f}s] "
                           f"{fencer.label} LOST - no person found in the box "
-                          f"({info['people_seen']} people detected in frame). "
+                          f"({gate_info['people_seen']} people detected in frame). "
                           f"The box was probably sliding onto scenery.")
                     loss_events.append((frame_index, time_sec, fencer.label))
+                    if tracer:
+                        tracer.add_event("LOST", frame_index, time_sec,
+                                         fencer.label,
+                                         gate_info["people_seen"])
                     if show:
                         paused = True
                         print("       Paused. Re-select with A or B.")
-                elif info["recovered"]:
+                elif gate_info["recovered"]:
                     print(f"[frame {frame_index}, t={time_sec:.2f}s] "
                           f"{fencer.label} re-attached to a detected person. "
                           f"Check it is the RIGHT person.")
+                    if tracer:
+                        tracer.add_event("RECOVERED", frame_index, time_sec,
+                                         fencer.label)
 
         # 3. Two fencers cannot be in the same place. If both boxes have
         #    sat on top of each other for a while, at least one tracker is
@@ -429,6 +471,9 @@ def main():
                   f"WARNING: both boxes are on the same spot (overlap "
                   f"{iou:.0%}). At least one tracker is on the wrong person.")
             overlap_events.append((frame_index, time_sec))
+            if tracer:
+                tracer.add_event("OVERLAP", frame_index, time_sec,
+                                 detail=round(iou, 3))
             if show:
                 paused = True
                 print("       Paused. Press A and/or B to re-select.")
@@ -438,6 +483,9 @@ def main():
             if not state["tracked"] and fencer.frames_lost == 1:
                 print(f"[frame {frame_index}, t={time_sec:.2f}s] {fencer.label} LOST")
                 loss_events.append((frame_index, time_sec, fencer.label))
+                if tracer:
+                    tracer.add_event("LOST", frame_index, time_sec,
+                                     fencer.label, "tracker")
                 if show:
                     paused = True
                     print(f"       Paused. Press "
@@ -514,9 +562,16 @@ def main():
         frames_written += 1
         if args.progress:
             print(f"PROGRESS {frames_written} {total_to_do}", flush=True)
+        # The row goes out BEFORE the --max-frames check. It used to come
+        # after, so the last frame of every capped run was written to the
+        # video but never to the CSV: 221 frames of video, 220 rows of
+        # data. The missing one is the frame you most want, the one where
+        # you check whether the box is still on the right person.
+        csv_out.write_row(frame_index, timestamp_ms, camera, overlap, states)
+        if tracer:
+            tracer.add_frame(frame_index, timestamp_ms, camera, overlap, states)
         if args.max_frames and frames_written >= args.max_frames:
             break
-        csv_out.write_row(frame_index, timestamp_ms, camera, overlap, states)
 
         if quit_early:
             print(f"\nStopped early at frame {frame_index}.")
@@ -526,6 +581,8 @@ def main():
     cap.release()
     writer.release()
     csv_out.close()
+    if tracer:
+        tracer.close()
     if show:
         cv2.destroyAllWindows()
         cv2.waitKey(1)
@@ -542,6 +599,9 @@ def main():
 
     print(f"  video: {out_video}")
     print(f"  csv:   {out_csv}")
+    if tracer:
+        print(f"  trace: {tracer.path} "
+              f"({len(tracer.frames)} frames, {len(tracer.events)} events)")
 
     if loss_events:
         print(f"\n{len(loss_events)} tracking loss event(s):")
