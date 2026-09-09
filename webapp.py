@@ -458,8 +458,8 @@ input[type=range]{flex:1;min-width:220px}
   <h2>1 &nbsp;Choose a clip</h2>
   <div class="drop" id="drop">Drop a video here, or click to pick one</div>
   <input type="file" id="file" accept="video/*" class="hidden">
-  <p class="hint">Big clip already on this Mac? Paste its path instead &mdash;
-     nothing gets copied. In Finder, right&#8209;click the file and hold
+  <p class="hint">Big clip already on this Mac? Paste its path instead.
+     Nothing gets copied. In Finder, right&#8209;click the file and hold
      Option, then &ldquo;Copy as Pathname&rdquo;.</p>
   <div class="row">
     <input type="text" id="path" placeholder="/Users/you/Movies/bout.MOV">
@@ -480,7 +480,7 @@ input[type=range]{flex:1;min-width:220px}
   </div>
   <canvas id="cv"></canvas>
   <p class="hint">
-    Drag a box around each fencer&rsquo;s <b>mask and torso only</b> &mdash; not
+    Drag a box around each fencer&rsquo;s <b>mask and torso only</b>, not
     the legs. Measured on your own footage: a full&#8209;body box drifted onto
     the referee after 49 frames; a torso box followed the fencer correctly.
   </p>

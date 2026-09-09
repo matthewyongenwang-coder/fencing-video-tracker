@@ -108,8 +108,7 @@ footer a{color:var(--dim);text-decoration:underline}
     </div>
 
     <div class="cta">
-      <a class="btn primary" href="app/">Try it in your browser</a>
-      <a class="btn" href="https://github.com/matthewyongenwang-coder/riposte">Source on GitHub</a>
+      <a class="btn primary" href="https://github.com/matthewyongenwang-coder/riposte">Source on GitHub</a>
       <a class="btn" href="https://github.com/matthewyongenwang-coder/riposte/blob/main/FILMING.md">How to film for it</a>
       <a class="btn" href="#results">What it gets right and wrong</a>
     </div>
@@ -269,22 +268,33 @@ python3 get_models.py</code></pre>
        them were trained by this project. It runs entirely on your own computer,
        with no accounts and nothing uploaded anywhere.</p>
 
-    <h3>Or run it in the browser</h3>
-    <p>There is a <a href="app/">browser version</a> that needs no install at all.
-       The video is read straight off your disk and never uploaded, so clip size
-       does not matter. With WebGPU it runs the same YOLOX detector as the Python
-       version, at about 35 frames per second.</p>
-    <p>I first shipped it with a smaller detector because it loads in half a second
-       instead of downloading 36MB. Measured over 221 frames of the fleche clip,
-       that was a bad trade:</p>
+    <h3>There was a browser version. I removed it.</h3>
+    <p>It ran the tracking in JavaScript so you could use it with no install at
+       all. To do that it had to drop the CSRT tracker, which has no browser
+       equivalent, and cut the camera correction down to sliding only, because
+       doing it properly means shipping 8MB of OpenCV.js.</p>
+    <p>Neither cut is small. On the panning Portland clip the camera rotates
+       1.01 degrees and zooms 1.0924x, and a sliding-only correction ignores
+       both of those. So the browser version was quietly less accurate than the
+       Python one on exactly the footage that is hardest, and nothing in the
+       repo could have told me by how much, because the two versions shared no
+       tests.</p>
+    <p>Two implementations of one algorithm in two languages drift apart, and
+       the copy is the one that loses. I would rather have one engine I can
+       measure than two I have to trust. There is now a golden trace per
+       benchmark case and a single command that says whether behaviour moved,
+       which is what I should have built before writing a second version.</p>
+    <p>One measurement from it is worth keeping. I first shipped it with a
+       smaller detector because it loads in half a second instead of
+       downloading 36MB. Over 221 frames of the fleche clip that was a bad
+       trade:</p>
     <table>
       <tr><th>Detector</th><th>People found per frame</th><th>Frames a fencer was lost</th></tr>
       <tr><td>Small (EfficientDet-Lite0)</td><td>6.0</td><td class="bad">94</td></tr>
       <tr><td>YOLOX, same as Python</td><td>12.9</td><td class="ok">6</td></tr>
     </table>
     <p>The small one was finding half as many people, so it was simply missing
-       fencers. The browser version now uses YOLOX when WebGPU is available and
-       says plainly when it has fallen back to the weaker one.</p>
+       fencers. Detector size is not somewhere to save load time.</p>
   </div>
 </section>
 
