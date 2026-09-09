@@ -47,7 +47,7 @@ VIT_MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "models", "vittrack.onnx")
 
 
-def create_tracker(kind="csrt"):
+def create_tracker(kind="vit"):
     """
     Create one tracker instance.
 

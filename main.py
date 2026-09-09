@@ -248,9 +248,10 @@ def main():
     parser.add_argument("--trace", default=None,
                         help="Write a machine-checkable JSON record of the "
                              "run to this path. See runtrace.py.")
-    parser.add_argument("--tracker", choices=["csrt", "vit"], default="csrt",
-                        help="csrt (default, sticky but fails silently) or "
-                             "vit (gives up sooner but reports a real score)")
+    parser.add_argument("--tracker", choices=["vit", "csrt"], default="vit",
+                        help="vit (default, gives up sooner and reports a "
+                             "real score) or csrt (stickier, but when it goes "
+                             "wrong it goes wrong silently)")
     args = parser.parse_args()
 
     show = not args.no_display

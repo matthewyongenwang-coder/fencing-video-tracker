@@ -80,7 +80,7 @@ EXPECTED = {}
 COLOR_A, COLOR_B = (0, 140, 255), (255, 90, 0)
 
 
-def run_case(name, path, start, count, box_a, box_b, tracker="csrt",
+def run_case(name, path, start, count, box_a, box_b, tracker="vit",
              use_pose=False, use_detect=False, out_dir="_bench"):
     cap = open_video(path)
     if start:
@@ -198,7 +198,7 @@ def run_case(name, path, start, count, box_a, box_b, tracker="csrt",
 def main():
     parser = argparse.ArgumentParser(description="Run the tracking benchmark.")
     parser.add_argument("cases", nargs="*", help="Case names, or none for all")
-    parser.add_argument("--tracker", choices=["csrt", "vit"], default="csrt")
+    parser.add_argument("--tracker", choices=["vit", "csrt"], default="vit")
     parser.add_argument("--pose", action="store_true")
     parser.add_argument("--detect", action="store_true",
                         help="Snap boxes to detected people (see detect.py)")

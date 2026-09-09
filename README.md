@@ -374,6 +374,39 @@ moment with both arms out will fool it.
 
 ---
 
+## Which tracker runs by default
+
+The default is now the ViT tracker (`--tracker vit`), not CSRT. Both are
+measured on the same five cases, and neither wins outright. Tracked
+percentage is not a quality score, because a box that sits confidently on
+a referee counts as tracked the whole time, so read the loss events
+alongside it.
+
+| Case | tracked CSRT | tracked ViT | landmarks CSRT | landmarks ViT |
+|---|---|---|---|---|
+| cincy-pan-blur | 76% / 100% | 99% / 83% | 90% / 89% | 91% / 98% |
+| portland-fleche | 88% / 100% | 47% / 100% | 98% / 91% | 83% / 97% |
+| portland-still | 100% / 100% | 100% / 100% | 100% / 100% | 90% / 100% |
+| seattle-lowres | 100% / 100% | 100% / 100% | 100% / 75% | 100% / 91% |
+| sf-blur-posters | 31% / 100% | 42% / 68% | 64% / 73% | 90% / 67% |
+
+ViT is better on the two blurred, panning clips and better for landmarks
+almost everywhere. It also reports a real confidence, which CSRT cannot,
+and it gives up sooner instead of holding on to the wrong thing. On
+sf-blur-posters CSRT reports Fencer B as tracked on every single frame of
+a clip where B is a documented failure, which is the silent-success
+problem in one number.
+
+The cost is the crossing. ViT declares Fencer A lost eight times between
+frames 101 and 138 of the fleche clip, which is the crossing itself, and
+the momentum work in this repo was built to get through exactly that. My
+own by-eye verdict recorded above says both boxes were on distinct,
+correct fencers at frames 105, 140 and 165 under CSRT. So on that clip ViT
+is losing a fencer it should be holding.
+
+Switch back per run with `--tracker csrt` if you are working on a clip
+with a fleche in it.
+
 ## The benchmark
 
 ```bash
