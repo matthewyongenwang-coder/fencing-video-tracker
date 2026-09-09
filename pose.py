@@ -149,7 +149,34 @@ class PoseEstimator:
     a box sitting on empty floor produces None.
     """
 
-    def __init__(self, confidence_threshold=0.4):
+    # The crop is square and built from the tracked box. reach sets how
+    # far it extends past the box, so it decides whether the legs and the
+    # extended sword arm are inside the picture the model sees.
+    #
+    # 1.15 is tuned for a fencer standing roughly upright. It is too tight
+    # for a deep lunge, where the body stretches sideways well past a
+    # torso box. Widening it to 1.60 fixes those frames and breaks others,
+    # because on an upright fencer the wider crop leaves the body small in
+    # the frame and the model starts missing it.
+    #
+    # Measured over 781 tracked-fencer frames from four competitions,
+    # landmarks found as a percentage of frames where the fencer was
+    # tracked:
+    #
+    #   case               1.15 only   1.60 only   1.15 then 1.60
+    #   cincy-pan-blur      65% / 49%   89% / 85%    92% / 91%
+    #   portland-fleche     98% / 53%   90% / 85%    98% / 87%
+    #   sf-blur-posters     40% / 40%   62% / 46%    62% / 55%
+    #   seattle-lowres     100% / 71%  100% / 59%   100% / 73%
+    #
+    # Neither single value wins. Trying the tight crop first and only
+    # widening when it comes back empty is never worse than either, and
+    # takes the average from 64.5% to 82.3%. It costs a second inference
+    # on 15% to 60% of frames, and only on the frames that already failed.
+    NARROW = dict(hip_fraction=0.60, reach=1.15)
+    WIDE = dict(hip_fraction=0.60, reach=1.60)
+
+    def __init__(self, confidence_threshold=0.4, retry_wider=True):
         if not os.path.exists(MODEL_PATH):
             raise RuntimeError(
                 f"Pose model not found at {MODEL_PATH}\n"
@@ -160,6 +187,12 @@ class PoseEstimator:
                 "Or run without --pose.")
         self.model = MPPose(modelPath=MODEL_PATH,
                             confThreshold=confidence_threshold)
+        self.retry_wider = retry_wider
+        # How often the wide crop rescued a frame the tight one missed.
+        # Worth watching: if this climbs towards every frame, the tight
+        # crop has stopped earning its place.
+        self.rescued = 0
+        self.attempts = 0
 
     @staticmethod
     def _region_hint(box, hip_fraction=0.60, reach=1.15):
@@ -188,10 +221,15 @@ class PoseEstimator:
         """Returns a PoseResult, or None if no person was found."""
         if box[2] < 10 or box[3] < 10:
             return None
+        self.attempts += 1
         # _region_hint returns a fresh array each call on purpose: the
         # vendored preprocessing subtracts the pad offset in place, so a
         # reused array would be quietly corrupted after the first frame.
-        raw = self.model.infer(frame, self._region_hint(box))
+        raw = self.model.infer(frame, self._region_hint(box, **self.NARROW))
+        if raw is None and self.retry_wider:
+            raw = self.model.infer(frame, self._region_hint(box, **self.WIDE))
+            if raw is not None:
+                self.rescued += 1
         if raw is None:
             return None
         _bbox, landmarks, _world, _mask, _heatmap, confidence = raw

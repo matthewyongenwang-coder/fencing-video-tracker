@@ -302,6 +302,38 @@ evidence every frame the pose model found nothing, and pose only lands on
 about 75% of frames because it fails on the blurriest ones, so the gaps
 wiped the count before it could trigger.
 
+### The crop was too tight, and it cost a third of the landmarks
+
+Pose runs on a square crop built from the tracked box, and how far that
+crop reaches past the box decides whether the legs and the extended sword
+arm are inside the picture the model sees. It was set to 1.15 box-widths,
+which suits a fencer standing upright and is too tight for a deep lunge,
+where the body stretches sideways well past a torso box.
+
+Widening it to 1.60 fixes those frames and breaks others. On an upright
+fencer the wider crop leaves the body small in frame and the model starts
+missing it. Measured over 781 tracked-fencer frames from four competitions,
+as a percentage of the frames where that fencer was actually tracked:
+
+| Case | 1.15 only | 1.60 only | 1.15 then 1.60 |
+|---|---|---|---|
+| cincy-pan-blur | 65% / 49% | 89% / 85% | 92% / 91% |
+| portland-fleche | 98% / 53% | 90% / 85% | 98% / 87% |
+| sf-blur-posters | 40% / 40% | 62% / 46% | 62% / 55% |
+| seattle-lowres | 100% / 71% | 100% / 59% | 100% / 73% |
+
+Neither single value wins. Trying the tight crop first and only widening
+when it comes back empty is never worse than either, and it took the
+average across those eight numbers from 64.5% to 82.3%. It costs a second
+inference on 15% to 60% of frames, and only on frames that had already
+failed.
+
+Across the whole benchmark after the change, landmarks now land on 95% of
+Fencer A's tracked frames and 85% of Fencer B's, against roughly 79% and
+66% before. Every one of the ten per-case numbers improved or held, and
+the golden traces confirmed the change touched nothing except pose: zero
+event differences, zero position differences.
+
 Pose does not drive the tracker. I tried letting it re-lock the box each
 frame, and on the fleche clip it took Fencer A from completely lost, ending
 at x=1179, to correct, ending at x=205. The same change made Fencer B
